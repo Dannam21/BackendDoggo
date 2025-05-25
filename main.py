@@ -1,4 +1,5 @@
 from fastapi import FastAPI, Depends, HTTPException
+from typing import List
 from sqlalchemy.orm import Session
 from fastapi.security import OAuth2PasswordBearer
 from database import SessionLocal, engine
@@ -95,3 +96,56 @@ def agregar_mascota(mascota: schemas.MascotaCreate, db: Session = Depends(get_db
     db.commit()
     db.refresh(nueva_mascota)
     return nueva_mascota
+
+
+# === PREGUNTAS ===
+
+@app.post("/preguntas", response_model=schemas.PreguntaOut)
+def crear_pregunta(pregunta: schemas.PreguntaCreate, db: Session = Depends(get_db)):
+    return crud.create_pregunta(db, pregunta)
+
+@app.get("/preguntas", response_model=List[schemas.PreguntaOut])
+def listar_preguntas(db: Session = Depends(get_db)):
+    return db.query(models.Pregunta).all()
+
+@app.post("/respuestas", response_model=schemas.RespuestaOut)
+def crear_respuesta(respuesta: schemas.RespuestaCreate, db: Session = Depends(get_db)):
+    db_respuesta = models.Respuesta(
+        pregunta_id=respuesta.pregunta_id,
+        valor=respuesta.valor
+    )
+    db.add(db_respuesta)
+    db.commit()
+    db.refresh(db_respuesta)
+    return db_respuesta
+
+
+
+@app.get("/respuestas/{pregunta_id}", response_model=List[schemas.RespuestaOut])
+def listar_respuestas_posibles(pregunta_id: int, db: Session = Depends(get_db)):
+    return db.query(models.Respuesta).filter(models.Respuesta.pregunta_id == pregunta_id).all()
+
+
+@app.post("/respuestas_usuario")
+def guardar_respuestas_usuario(
+    respuestas: List[schemas.RespuestaUsuarioCreate], 
+    db: Session = Depends(get_db), 
+    user=Depends(get_current_user)
+):
+    adoptante_id = user["sub"]
+    for r in respuestas:
+        db_respuesta = models.RespuestaUsuario(
+            adoptante_id=adoptante_id,
+            pregunta_id=r.pregunta_id,
+            respuesta_id=r.respuesta_id,
+        )
+        db.add(db_respuesta)
+    db.commit()
+    return {"message": "Respuestas guardadas"}
+
+@app.get("/matches")
+def obtener_matches_usuario(db: Session = Depends(get_db), user=Depends(get_current_user)):
+    from crud import obtener_matches
+    ids = obtener_matches(db, user.id)
+    return [crud.get_user_by_id(db, id) for id in ids]
+

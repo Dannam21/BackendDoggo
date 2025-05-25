@@ -1,4 +1,5 @@
 from pydantic import BaseModel
+from typing import Optional
 
 # === REGISTRO DE USUARIOS ===
 class AdoptanteRegister(BaseModel):
@@ -49,3 +50,47 @@ class MascotaResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# === PREGUNTAS Y RESPUESTAS ===
+# Para crear preguntas (igual)
+class PreguntaCreate(BaseModel):
+    texto: str
+
+class PreguntaOut(BaseModel):
+    id: int
+    texto: str
+
+    class Config:
+        orm_mode = True
+
+
+# Para las opciones posibles de respuesta (catálogo)
+class RespuestaCreate(BaseModel):
+    pregunta_id: int
+    valor: str
+
+class RespuestaOut(BaseModel):
+    id: int
+    pregunta_id: int
+    valor: str
+
+    class Config:
+        orm_mode = True
+
+
+# Para las respuestas que da el usuario
+class RespuestaUsuarioCreate(BaseModel):
+    adoptante_id: Optional[int] = None  # opcional, puede obtenerse del token
+    pregunta_id: int
+    respuesta_id: Optional[int] = None  # cuando elige una respuesta predefinida
+
+class RespuestaUsuarioOut(BaseModel):
+    id: int
+    adoptante_id: int
+    pregunta_id: int
+    respuesta_id: Optional[int]
+    valor_personalizado: Optional[str]
+
+    class Config:
+        orm_mode = True

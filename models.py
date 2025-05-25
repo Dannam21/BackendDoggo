@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey
+from sqlalchemy import Column, Integer, String, ForeignKey, Float
 from database import Base
 from sqlalchemy.orm import relationship
 
@@ -19,6 +19,9 @@ class Adoptante(Base):
     apellido = Column(String)
     dni = Column(String, unique=True)
 
+    respuestas_usuario = relationship("RespuestaUsuario", back_populates="adoptante")
+
+
 class Albergue(Base):
     __tablename__ = "albergue"
     id = Column(Integer, ForeignKey("usuario.id"), primary_key=True)
@@ -38,3 +41,30 @@ class Mascota(Base):
     albergue_id = Column(Integer, ForeignKey("albergue.id"))  # relación con la empresa
 
     albergue = relationship("Albergue", back_populates="mascotas")
+
+class Pregunta(Base):
+    __tablename__ = "preguntas"
+    id = Column(Integer, primary_key=True, index=True)
+    texto = Column(String, nullable=False)
+    respuestas_posibles = relationship("Respuesta", back_populates="pregunta")
+
+
+class Respuesta(Base):
+    __tablename__ = "respuestas"
+    id = Column(Integer, primary_key=True, index=True)
+    pregunta_id = Column(Integer, ForeignKey("preguntas.id"))
+    valor = Column(String)  # Por ejemplo: "Sí", "No", "Prefiero lugares tranquilos", etc.
+
+    pregunta = relationship("Pregunta", back_populates="respuestas_posibles")
+
+
+class RespuestaUsuario(Base):
+    __tablename__ = "respuestas_usuario"
+    id = Column(Integer, primary_key=True, index=True)
+    adoptante_id = Column(Integer, ForeignKey("adoptante.id"))
+    pregunta_id = Column(Integer, ForeignKey("preguntas.id"))
+    respuesta_id = Column(Integer, ForeignKey("respuestas.id"))  # referencia la respuesta predefinida elegida
+
+    adoptante = relationship("Adoptante", back_populates="respuestas_usuario")
+    pregunta = relationship("Pregunta")
+    respuesta = relationship("Respuesta")
