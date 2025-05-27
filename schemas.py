@@ -1,5 +1,6 @@
 from pydantic import BaseModel
 from typing import Optional
+from datetime import datetime
 
 # === REGISTRO DE USUARIOS ===
 class AdoptanteRegister(BaseModel):
@@ -92,5 +93,51 @@ class RespuestaUsuarioOut(BaseModel):
     respuesta_id: Optional[int]
     valor_personalizado: Optional[str]
 
+    class Config:
+        orm_mode = True
+
+# DONACIÓN
+class DonacionCreate(BaseModel):
+    albergue_id: int
+    monto: float
+    comentario: str | None = None
+
+class DonacionOut(DonacionCreate):
+    id: int
+    adoptante_id: int
+    fecha: datetime
+    class Config:
+        orm_mode = True
+
+# ETIQUETA
+class EtiquetaCreate(BaseModel):
+    nombre: str
+    descripcion: str | None = None
+
+class EtiquetaOut(EtiquetaCreate):
+    id: int
+    class Config:
+        orm_mode = True
+
+# ETIQUETA ADOPTANTE / MASCOTA
+class EtiquetaAdoptanteCreate(BaseModel):
+    id: int           # hereda de etiqueta
+    nombre: str
+    descripcion: str | None = None
+    adoptante_id: int
+
+class EtiquetaMascotaCreate(BaseModel):
+    id: int
+    nombre: str
+    descripcion: str | None = None
+    mascota_id: int
+
+# RES_ETIQUETA
+class ResEtiquetaCreate(BaseModel):
+    respuesta_usuario_id: int
+    etiqueta_id: int
+
+class ResEtiquetaOut(ResEtiquetaCreate):
+    id: int
     class Config:
         orm_mode = True

@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, status
 from typing import List
 from sqlalchemy.orm import Session
 from fastapi.security import OAuth2PasswordBearer
@@ -149,3 +149,73 @@ def obtener_matches_usuario(db: Session = Depends(get_db), user=Depends(get_curr
     ids = obtener_matches(db, user.id)
     return [crud.get_user_by_id(db, id) for id in ids]
 
+# === DONACIONES ===
+
+@app.post("/donaciones", response_model=schemas.DonacionOut, status_code=status.HTTP_201_CREATED)
+def crear_donacion(
+    don: schemas.DonacionCreate,
+    db: Session = Depends(get_db),
+    user = Depends(get_current_user)
+):
+    # Solo adoptantes pueden donar
+    if user["rol"] != "adoptante":
+        raise HTTPException(status_code=403, detail="Solo los adoptantes pueden hacer donaciones")
+    # adoptante_id viene del token
+    return crud.create_donacion(db, don, adoptante_id=int(user["sub"]))
+
+@app.get("/donaciones", response_model=List[schemas.DonacionOut])
+def listar_donaciones(db: Session = Depends(get_db), user = Depends(get_current_user)):
+    # podrías filtrar solo las propias si quisieras
+    return crud.get_all_donaciones(db)
+
+
+# === ETIQUETAS GENERALES ===
+
+@app.post("/etiquetas", response_model=schemas.EtiquetaOut, status_code=status.HTTP_201_CREATED)
+def crear_etiqueta(et: schemas.EtiquetaCreate, db: Session = Depends(get_db)):
+    return crud.create_etiqueta(db, et)
+
+@app.get("/etiquetas", response_model=List[schemas.EtiquetaOut])
+def listar_etiquetas(db: Session = Depends(get_db)):
+    return crud.get_all_etiquetas(db)
+
+
+# === ETIQUETAS ESPECÍFICAS ===
+
+@app.post("/etiquetas/adoptante", response_model=schemas.EtiquetaOut, status_code=status.HTTP_201_CREATED)
+def etiquetar_adoptante(
+    et: schemas.EtiquetaAdoptanteCreate,
+    db: Session = Depends(get_db),
+    user = Depends(get_current_user)
+):
+    # solo adoptante puede etiquetarse a sí mismo
+    if user["rol"] != "adoptante" or int(user["sub"]) != et.adoptante_id:
+        raise HTTPException(403, "No puedes etiquetar a otro adoptante")
+    return crud.create_e_adoptante(db, et)
+
+@app.post("/etiquetas/mascota", response_model=schemas.EtiquetaOut, status_code=status.HTTP_201_CREATED)
+def etiquetar_mascota(
+    et: schemas.EtiquetaMascotaCreate,
+    db: Session = Depends(get_db),
+    user = Depends(get_current_user)
+):
+    # solo el albergue dueño de la mascota puede etiquetar
+    if user["rol"] != "albergue":
+        raise HTTPException(403, "Solo albergues pueden etiquetar mascotas")
+    return crud.create_e_mascota(db, et)
+
+
+# === ASOCIACIÓN RESPUESTA ↔ ETIQUETA ===
+
+@app.post("/res_etiqueta", response_model=schemas.ResEtiquetaOut, status_code=status.HTTP_201_CREATED)
+def asociar_res_etiqueta(
+    re: schemas.ResEtiquetaCreate,
+    db: Session = Depends(get_db),
+    user = Depends(get_current_user)
+):
+    # validaciones opcionales: que la respuesta_usuario pertenezca al adoptante
+    return crud.create_res_etiqueta(db, re)
+
+@app.get("/res_etiqueta", response_model=List[schemas.ResEtiquetaOut])
+def listar_res_etiquetas(db: Session = Depends(get_db)):
+    return crud.get_all_res_etiqueta(db)

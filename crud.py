@@ -110,3 +110,37 @@ def obtener_matches(db: Session, usuario_actual_id: int, k=3):
     vecinos_ids = [ids[i] for i in indices[0] if ids[i] != usuario_actual_id]
 
     return vecinos_ids
+
+def create_donacion(db: Session, don: schemas.DonacionCreate, adoptante_id: int):
+    db_d = models.Donacion(**don.dict(), adoptante_id=adoptante_id)
+    db.add(db_d); db.commit(); db.refresh(db_d)
+    return db_d
+
+def get_all_donaciones(db: Session):
+    return db.query(models.Donacion).all()
+
+def create_etiqueta(db: Session, et: schemas.EtiquetaCreate):
+    db_e = models.Etiqueta(**et.dict())
+    db.add(db_e); db.commit(); db.refresh(db_e)
+    return db_e
+
+def get_all_etiquetas(db: Session):
+    return db.query(models.Etiqueta).all()
+
+def create_e_adoptante(db: Session, et: schemas.EtiquetaAdoptanteCreate):
+    db_e = models.E_Adoptante(**et.dict())
+    db.add(db_e); db.commit(); db.refresh(db_e)
+    return db_e
+
+def create_e_mascota(db: Session, et: schemas.EtiquetaMascotaCreate):
+    db_e = models.E_Mascota(**et.dict())
+    db.add(db_e); db.commit(); db.refresh(db_e)
+    return db_e
+
+def create_res_etiqueta(db: Session, re: schemas.ResEtiquetaCreate):
+    db_re = models.Res_Etiqueta(**re.dict())
+    db.add(db_re); db.commit(); db.refresh(db_re)
+    return db_re
+
+def get_all_res_etiqueta(db: Session):
+    return db.query(models.Res_Etiqueta).all()
