@@ -40,6 +40,8 @@ class MascotaCreate(BaseModel):
     nombre: str
     edad: int
     especie: str
+    descripcion:str
+    imagen_id: int
 
 class MascotaResponse(BaseModel):
     id: int
@@ -47,7 +49,8 @@ class MascotaResponse(BaseModel):
     edad: int
     especie: str
     albergue_id: int
-
+    imagen_id: int
+    
     class Config:
         from_attributes = True
 

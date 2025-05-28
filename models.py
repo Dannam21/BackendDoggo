@@ -38,9 +38,13 @@ class Mascota(Base):
     nombre = Column(String, index=True)
     especie = Column(String)  
     edad = Column(Integer)
-    albergue_id = Column(Integer, ForeignKey("albergue.id"))  # relación con la empresa
+    descripcion = Column(String, nullable=True)
+    albergue_id = Column(Integer, ForeignKey("albergue.id"))  # Relación con la empresa
+    imagen_id = Column(Integer, ForeignKey("imagenes.id"))
 
+    imagen = relationship("Imagen")
     albergue = relationship("Albergue", back_populates="mascotas")
+
 
 class Pregunta(Base):
     __tablename__ = "preguntas"
@@ -53,7 +57,7 @@ class Respuesta(Base):
     __tablename__ = "respuestas"
     id = Column(Integer, primary_key=True, index=True)
     pregunta_id = Column(Integer, ForeignKey("preguntas.id"))
-    valor = Column(String)  # Por ejemplo: "Sí", "No", "Prefiero lugares tranquilos", etc.
+    valor = Column(String)  # Por ejemplo: "Si", "No", "Prefiero lugares tranquilos", etc.
 
     pregunta = relationship("Pregunta", back_populates="respuestas_posibles")
 
@@ -68,3 +72,13 @@ class RespuestaUsuario(Base):
     adoptante = relationship("Adoptante", back_populates="respuestas_usuario")
     pregunta = relationship("Pregunta")
     respuesta = relationship("Respuesta")
+
+
+
+class Imagen(Base):
+    __tablename__ = "imagenes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    ruta = Column(String, nullable=False)
+
+

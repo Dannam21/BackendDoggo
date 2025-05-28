@@ -62,6 +62,10 @@ def create_mascota(db: Session, mascota: schemas.MascotaCreate, albergue_id: int
     db.refresh(db_mascota)
     return db_mascota
 
+def get_mascotas_por_albergue(db: Session, albergue_id: int):
+    return db.query(models.Mascota).filter(models.Mascota.albergue_id == albergue_id).all()
+
+
 
 # === PREGUNTAS ===
 from sklearn.neighbors import NearestNeighbors
