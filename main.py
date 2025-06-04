@@ -1,33 +1,26 @@
-from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form
-from typing import List
+from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
 from fastapi.security import OAuth2PasswordBearer
-from database import SessionLocal, engine
-import models, schemas, crud, auth
 from fastapi.middleware.cors import CORSMiddleware
-import os
-from pathlib import Path
-import shutil
-from models import Imagen
-from models import Mascota
-from schemas import MascotaCreate
 from fastapi.responses import FileResponse
-
+import shutil, os
+import json
+import models, schemas, crud, auth
+from database import SessionLocal, engine
 
 models.Base.metadata.create_all(bind=engine)
 app = FastAPI()
 
-# === CONFIGURACIÓN DE CORS ===
+# === CONFIGURACIÓN CORS ===
 origins = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
 ]
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,  # Puedes usar ["*"] para pruebas si quieres permitir todo
+    allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["*"],    # O ["GET", "POST"] si prefieres restringir
+    allow_methods=["*"],
     allow_headers=["*"],
 )
 
@@ -39,150 +32,184 @@ def get_db():
     finally:
         db.close()
 
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
-
-
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")  # solo se usa para extraer el token
-
-@app.get("/")
-def root():
-    return {"message": "Bienvenido a la API de Doggo"}
-
-# === REGISTRO DE USUARIOS ===
-@app.post("/register/adoptante")
-def register_adoptante(user: schemas.AdoptanteRegister, db: Session = Depends(get_db)):
-    if crud.get_user_by_email(db, user.correo):
-        raise HTTPException(status_code=400, detail="El correo ya está registrado")
-
-    user_id = crud.create_user(db, user.correo, user.contrasena)
-    adoptante = crud.create_adoptante(db, user_id, user)
-    return {"mensaje": "Adoptante registrado con éxito"}
-
-@app.post("/register/albergue")
-def register_albergue(user: schemas.AlbergueRegister, db: Session = Depends(get_db)):
-    if crud.get_user_by_email(db, user.correo):
-        raise HTTPException(status_code=400, detail="El correo ya está registrado")
-
-    user_id = crud.create_user(db, user.correo, user.contrasena)
-    albergue = crud.create_albergue(db, user_id, user)
-    return {"mensaje": "Albergue registrado con éxito"}
-
-# === LOGIN ===
-
-
-@app.post("/login/adoptante")
-def login_adoptante(user: schemas.AdoptanteLogin, db: Session = Depends(get_db)):
-    db_user = crud.get_user_by_email(db, user.correo)
-    if not db_user or not crud.verify_password(user.contrasena, db_user.contrasena):
-        raise HTTPException(status_code=401, detail="Credenciales incorrectas")
-
-    adoptante = db.query(models.Adoptante).filter(models.Adoptante.id == db_user.id).first()
-    if not adoptante:
-        raise HTTPException(status_code=403, detail="El usuario no es un adoptante")
-
-    token_data = {"sub": str(db_user.id), "rol": "adoptante"}
-    token = auth.create_access_token(token_data)
-    return {"access_token": token, "token_type": "bearer"}
-
-
-@app.post("/login/albergue")
-def login_albergue(user: schemas.AlbergueLogin, db: Session = Depends(get_db)):
-    db_user = crud.get_user_by_email(db, user.correo)
-    if not db_user or not crud.verify_password(user.contrasena, db_user.contrasena):
-        raise HTTPException(status_code=401, detail="Credenciales incorrectas")
-
-    albergue = db.query(models.Albergue).filter(
-        models.Albergue.id == db_user.id,
-        models.Albergue.ruc == user.ruc
-    ).first()
-
-    if not albergue:
-        raise HTTPException(status_code=403, detail="No es un albergue o RUC incorrecto")
-
-    token_data = {"sub": str(db_user.id), "rol": "albergue", "albergue_id": albergue.id}  # incluir albergue_id
-    token = auth.create_access_token(token_data)
-    return {"access_token": token, "token_type": "bearer", "albergue_id": albergue.id}  # retornamos el albergue_id
-
-
-# @app.post("/login/albergue")
-# def login_albergue(user: schemas.AlbergueLogin, db: Session = Depends(get_db)):
-#     db_user = crud.get_user_by_email(db, user.correo)
-#     if not db_user or not crud.verify_password(user.contrasena, db_user.contrasena):
-#         raise HTTPException(status_code=401, detail="Credenciales incorrectas")
-
-#     albergue = db.query(models.Albergue).filter(
-#         models.Albergue.id == db_user.id,
-#         models.Albergue.ruc == user.ruc
-#     ).first()
-
-#     if not albergue:
-#         raise HTTPException(status_code=403, detail="No es un albergue o RUC incorrecto")
-
-#     token_data = {"sub": str(db_user.id), "rol": "albergue"}
-#     token = auth.create_access_token(token_data)
-#     return {"access_token": token, "token_type": "bearer"}
-
-# === DEPENDENCIA PARA OBTENER USUARIO DESDE TOKEN ===
 def get_current_user(token: str = Depends(oauth2_scheme)):
     payload = auth.verify_token(token)
     if not payload:
         raise HTTPException(status_code=401, detail="Token inválido")
     return payload
 
-# === ENDPOINTS PROTEGIDOS ===
+@app.get("/")
+def root():
+    return {"message": "Bienvenido a la API de Doggo"}
+
+@app.post("/register/adoptante")
+def register_adoptante(user: schemas.AdoptanteRegister, db: Session = Depends(get_db)):
+    if crud.get_adoptante_by_correo(db, user.correo):
+        raise HTTPException(status_code=400, detail="El correo ya está registrado")
+    if db.query(models.Adoptante).filter(models.Adoptante.dni == user.dni).first():
+        raise HTTPException(status_code=400, detail="El DNI ya está registrado")
+
+    new_adoptante = crud.create_adoptante(db, user)
+    return {"mensaje": "Adoptante registrado con éxito", "id": new_adoptante.id}
+
+# === REGISTRO DE ALBERGUE ===
+@app.post("/register/albergue")
+def register_albergue(user: schemas.AlbergueCreate, db: Session = Depends(get_db)):
+    if crud.get_albergue_by_correo(db, user.correo):
+        raise HTTPException(status_code=400, detail="El correo ya está registrado")
+
+    new_albergue = crud.create_albergue(db, user)
+    return {"mensaje": "Albergue registrado con éxito", "id": new_albergue.id}
+
+# === LOGIN ADOPTANTE ===
+@app.post("/login/adoptante")
+def login_adoptante(user: schemas.AdoptanteLogin, db: Session = Depends(get_db)):
+    adopt = db.query(models.Adoptante).filter(models.Adoptante.correo == user.correo).first()
+    if not adopt or not crud.verify_password(user.contrasena, adopt.contrasena):
+        raise HTTPException(status_code=401, detail="Credenciales incorrectas")
+
+    token_data = {"sub": str(adopt.id), "rol": "adoptante"}
+    token = auth.create_access_token(token_data)
+    return {"access_token": token, "token_type": "bearer"}
+
+# === LOGIN ALBERGUE ===
+@app.post("/login/albergue")
+def login_albergue(user: schemas.AlbergueLogin, db: Session = Depends(get_db)):
+    alber = db.query(models.Albergue).filter(models.Albergue.correo == user.correo).first()
+    if not alber or not crud.verify_password(user.contrasena, alber.contrasena):
+        raise HTTPException(status_code=401, detail="Credenciales incorrectas")
+
+    token_data = {"sub": str(alber.id), "rol": "albergue", "albergue_id": alber.id}
+    token = auth.create_access_token(token_data)
+    return {"access_token": token, "token_type": "bearer"}
+
+# === ENDPOINT PROTEGIDO: OBTENER DATOS DEL ADOPTANTE ===
+@app.get("/adoptante/me", response_model=schemas.AdoptanteOut, summary="Obtener datos del adoptante autenticado")
+def get_adoptante_me(user=Depends(get_current_user), db: Session = Depends(get_db)):
+    adoptante_id = int(user["sub"])
+    adoptante_obj = db.query(models.Adoptante).filter(models.Adoptante.id == adoptante_id).first()
+    if not adoptante_obj:
+        raise HTTPException(status_code=404, detail="Adoptante no encontrado")
+
+    return schemas.AdoptanteOut.from_orm_with_etiquetas(adoptante_obj)
+
+@app.get("/mascotas/albergue/{albergue_id}",response_model=list[schemas.MascotaResponse])
+def obtener_mascotas_por_albergue(albergue_id: int,db: Session = Depends(get_db),user=Depends(get_current_user),):
+    if user["rol"] != "albergue" or int(user["sub"]) != albergue_id:
+        raise HTTPException(status_code=403, detail="Acceso denegado. Solo el albergue propietario puede ver sus mascotas.")
+    db_mascotas = (
+        db.query(models.Mascota)
+        .filter(models.Mascota.albergue_id == albergue_id)
+        .all()
+    )
+
+    resultado = []
+    for m in db_mascotas:
+        lista_etqs = []
+        if m.etiquetas:
+            try:
+                lista_etqs = json.loads(m.etiquetas)
+            except Exception:
+                lista_etqs = []
+        resultado.append(
+            schemas.MascotaResponse(
+                id=m.id,
+                nombre=m.nombre,
+                edad=m.edad,
+                especie=m.especie,
+                descripcion=m.descripcion,
+                albergue_id=m.albergue_id,
+                imagen_id=m.imagen_id,
+                etiquetas=lista_etqs,
+            )
+        )
+    return resultado
+
+@app.post("/mascotas", response_model=schemas.MascotaResponse)
+def crear_mascota( mascota: schemas.MascotaCreate, db: Session = Depends(get_db), user=Depends(get_current_user)):
+    if user["rol"] != "albergue":
+        raise HTTPException(status_code=403, detail="Solo los albergues pueden registrar mascotas")
+
+    albergue_id = int(user["albergue_id"])
+    imagen_obj = db.query(models.Imagen).filter(models.Imagen.id == mascota.imagen_id).first()
+    if not imagen_obj:
+        raise HTTPException(status_code=404, detail="Imagen no encontrada")
+
+    nueva = crud.create_mascota(db, mascota, albergue_id)
+
+    lista_etqs = []
+    if nueva.etiquetas:
+        try:
+            lista_etqs = json.loads(nueva.etiquetas)
+        except Exception:
+            lista_etqs = []
+
+    return schemas.MascotaResponse(
+        id=nueva.id,
+        nombre=nueva.nombre,
+        edad=nueva.edad,
+        especie=nueva.especie,
+        descripcion=nueva.descripcion,
+        albergue_id=nueva.albergue_id,
+        imagen_id=nueva.imagen_id,
+        etiquetas=lista_etqs,
+    )
+    
+    
+
+## POR VERIFICAR Y CORREGIR
+
 @app.get("/mascotas")
 def obtener_mascotas(db: Session = Depends(get_db), user=Depends(get_current_user)):
     mascotas = db.query(models.Mascota).all()
     return mascotas
 
-
-
-
 @app.post("/mascotas")
 def agregar_mascota(
-    mascota: MascotaCreate,
+    mascota: schemas.MascotaCreate,
     db: Session = Depends(get_db),
-    user=Depends(get_current_user)
+    user=Depends(get_current_user),
 ):
+    # Solo albergues pueden agregar mascotas
     if user["rol"] != "albergue":
         raise HTTPException(status_code=403, detail="Solo los albergues pueden registrar mascotas")
-    
-    # Verificar si la imagen existe en la base de datos
-    imagen = db.query(Imagen).filter(Imagen.id == mascota.imagen_id).first()
-    
-    if not imagen:
-        raise HTTPException(status_code=404, detail="Imagen no encontrada")
 
-    # Crear la nueva mascota y asociarla con la imagen
-    nueva_mascota = Mascota(
+    nueva_mascota = models.Mascota(
         nombre=mascota.nombre,
         edad=mascota.edad,
         especie=mascota.especie,
         descripcion=mascota.descripcion,
-        imagen_id=mascota.imagen_id,  # Asociamos el ID de la imagen
-        albergue_id=int(user["sub"]),  # Asociamos al albergue
+        imagen_id=mascota.imagen_id,
+        albergue_id=int(user["sub"]),
     )
-
     db.add(nueva_mascota)
     db.commit()
     db.refresh(nueva_mascota)
-
     return nueva_mascota
 
 
 
-@app.get("/mascotas/albergue/{albergue_id}", response_model=list[schemas.MascotaResponse])
-def obtener_mascotas_por_albergue(albergue_id: int, db: Session = Depends(get_db)):
-    return crud.get_mascotas_por_albergue(db, albergue_id)
 
 
-# === PREGUNTAS ===
+
+
+
+
+
+
+
+
+
+
+
 
 @app.post("/preguntas", response_model=schemas.PreguntaOut)
 def crear_pregunta(pregunta: schemas.PreguntaCreate, db: Session = Depends(get_db)):
     return crud.create_pregunta(db, pregunta)
 
-@app.get("/preguntas", response_model=List[schemas.PreguntaOut])
+@app.get("/preguntas", response_model=list[schemas.PreguntaOut])
 def listar_preguntas(db: Session = Depends(get_db)):
     return db.query(models.Pregunta).all()
 
@@ -197,20 +224,17 @@ def crear_respuesta(respuesta: schemas.RespuestaCreate, db: Session = Depends(ge
     db.refresh(db_respuesta)
     return db_respuesta
 
-
-
-@app.get("/respuestas/{pregunta_id}", response_model=List[schemas.RespuestaOut])
+@app.get("/respuestas/{pregunta_id}", response_model=list[schemas.RespuestaOut])
 def listar_respuestas_posibles(pregunta_id: int, db: Session = Depends(get_db)):
     return db.query(models.Respuesta).filter(models.Respuesta.pregunta_id == pregunta_id).all()
 
-
 @app.post("/respuestas_usuario")
 def guardar_respuestas_usuario(
-    respuestas: List[schemas.RespuestaUsuarioCreate], 
-    db: Session = Depends(get_db), 
-    user=Depends(get_current_user)
+    respuestas: list[schemas.RespuestaUsuarioCreate],
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
 ):
-    adoptante_id = user["sub"]
+    adoptante_id = int(user["sub"])
     for r in respuestas:
         db_respuesta = models.RespuestaUsuario(
             adoptante_id=adoptante_id,
@@ -224,44 +248,31 @@ def guardar_respuestas_usuario(
 @app.get("/matches")
 def obtener_matches_usuario(db: Session = Depends(get_db), user=Depends(get_current_user)):
     from crud import obtener_matches
-    ids = obtener_matches(db, user.id)
-    return [crud.get_user_by_id(db, id) for id in ids]
+    ids = obtener_matches(db, int(user["sub"]))
+    return [crud.get_user_by_id(db, id_) for id_ in ids]
 
-
-
-
-
-
+# === UPLOAD DE IMÁGENES ===
 UPLOAD_DIR = "imagenes"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 @app.post("/imagenes", response_model=dict)
 def subir_imagen(image: UploadFile = File(...), db: Session = Depends(get_db)):
     file_path = os.path.join(UPLOAD_DIR, image.filename)
-    
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(image.file, buffer)
 
-    nueva_imagen = Imagen(ruta=file_path)
+    nueva_imagen = models.Imagen(ruta=file_path)
     db.add(nueva_imagen)
     db.commit()
     db.refresh(nueva_imagen)
-
     return {"id": nueva_imagen.id, "ruta": nueva_imagen.ruta}
-
 
 @app.get("/imagenes/{imagen_id}")
 def obtener_imagen(imagen_id: int, db: Session = Depends(get_db)):
-    # Buscar la imagen en la base de datos
-    imagen = db.query(Imagen).filter(Imagen.id == imagen_id).first()
-
+    imagen = db.query(models.Imagen).filter(models.Imagen.id == imagen_id).first()
     if not imagen:
         raise HTTPException(status_code=404, detail="Imagen no encontrada")
-    
-    # Asegurarse de que el archivo existe en el sistema
     file_path = imagen.ruta
     if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="Archivo de imagen no encontrado")
-
-    # Devolver el archivo de imagen
     return FileResponse(file_path)

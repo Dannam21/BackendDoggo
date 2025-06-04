@@ -2,31 +2,20 @@ from sqlalchemy.orm import Session
 import models
 import schemas
 from passlib.hash import bcrypt
-
-# === USUARIO BASE ===
-def get_user_by_email(db: Session, email: str):
-    return db.query(models.Usuario).filter(models.Usuario.correo == email).first()
-
-def create_user(db: Session, correo: str, contrasena: str):
-    hashed_pw = bcrypt.hash(contrasena)
-    user = models.Usuario(correo=correo, contrasena=hashed_pw)
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-    return user.id
-
-def verify_password(plain_password, hashed_password):
-    return bcrypt.verify(plain_password, hashed_password)
+import json
 
 # === ADOPTANTE ===
-def create_adoptante(db: Session, user_id: int, adoptante: schemas.AdoptanteCreate):
-    print("Registrando adoptante:", adoptante.dict())  # <--- DEBUG
+def create_adoptante(db: Session, adoptante: schemas.AdoptanteRegister):
+    hashed_pw = bcrypt.hash(adoptante.contrasena)
 
     db_adoptante = models.Adoptante(
-        id=user_id,
         nombre=adoptante.nombre,
         apellido=adoptante.apellido,
-        dni=adoptante.dni
+        dni=adoptante.dni,
+        correo=adoptante.correo,
+        telefono=getattr(adoptante, "telefono", None),  # si agregaste teléfono
+        contrasena=hashed_pw,
+        etiquetas=json.dumps(adoptante.etiquetas or [])  # convertimos lista a JSON string
     )
     db.add(db_adoptante)
     db.commit()
@@ -34,36 +23,82 @@ def create_adoptante(db: Session, user_id: int, adoptante: schemas.AdoptanteCrea
     return db_adoptante
 
 # === ALBERGUE ===
-def create_albergue(db: Session, user_id: int, albergue: schemas.AlbergueCreate):
-    print("Registrando albergue:", albergue.dict())  # <--- DEBUG
+def create_albergue(db: Session, albergue: schemas.AlbergueRegister):
+    hashed_pw = bcrypt.hash(albergue.contrasena)
     db_albergue = models.Albergue(
-        id=user_id,
         nombre=albergue.nombre,
-        ruc=albergue.ruc
+        ruc=albergue.ruc,
+        correo=albergue.correo,
+        contrasena=hashed_pw,
+        telefono=albergue.telefono,
     )
     db.add(db_albergue)
     db.commit()
     db.refresh(db_albergue)
     return db_albergue
 
-# === MASCOTAS ===
-def get_all_mascotas(db: Session):
-    return db.query(models.Mascota).all()
 
-def create_mascota(db: Session, mascota: schemas.MascotaCreate, albergue_id: int):
+def get_albergue_by_correo(db: Session, correo: str):
+    return db.query(models.Albergue).filter(models.Albergue.correo == correo).first()
+
+def get_adoptante_by_correo(db: Session, correo: str):
+    return db.query(models.Adoptante).filter(models.Adoptante.correo == correo).first()
+
+def get_albergue_by_ruc(db: Session, ruc: str):
+    return db.query(models.Albergue).filter(models.Albergue.ruc == ruc).first()
+
+def get_adoptante_by_dni(db: Session, dni: str):
+    return db.query(models.Adoptante).filter(models.Adoptante.dni == dni).first()
+
+def encrypt_password(plain_password: str) -> str:
+    return bcrypt.hash(plain_password)
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    return bcrypt.verify(plain_password, hashed_password)
+
+
+def create_mascota(db: Session, mascota_data: schemas.MascotaCreate, albergue_id: int):
     db_mascota = models.Mascota(
-        nombre=mascota.nombre,
-        edad=mascota.edad,
-        especie=mascota.especie,
-        albergue_id=albergue_id
+        nombre=mascota_data.nombre,
+        edad=mascota_data.edad,
+        especie=mascota_data.especie,
+        descripcion=mascota_data.descripcion,
+        imagen_id=mascota_data.imagen_id,
+        albergue_id=albergue_id,
+        etiquetas=json.dumps(mascota_data.etiquetas)  # supongamos que en el modelo tienes un campo JSON/texto
     )
     db.add(db_mascota)
     db.commit()
     db.refresh(db_mascota)
     return db_mascota
 
+
+
+
+
+
+
+
+
+
+# POR VERIFICAR Y CORREGIR
+
+
+# === MASCOTAS ===
+def get_all_mascotas(db: Session):
+    return db.query(models.Mascota).all()
+
 def get_mascotas_por_albergue(db: Session, albergue_id: int):
     return db.query(models.Mascota).filter(models.Mascota.albergue_id == albergue_id).all()
+
+
+
+
+
+
+
+
+
 
 
 
