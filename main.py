@@ -77,13 +77,17 @@ def login_adoptante(user: schemas.AdoptanteLogin, db: Session = Depends(get_db))
 # === LOGIN ALBERGUE ===
 @app.post("/login/albergue")
 def login_albergue(user: schemas.AlbergueLogin, db: Session = Depends(get_db)):
-    alber = db.query(models.Albergue).filter(models.Albergue.correo == user.correo).first()
-    if not alber or not crud.verify_password(user.contrasena, alber.contrasena):
+    db_albergue = crud.get_albergue_by_correo(db, user.correo)  
+    if not db_albergue or not crud.verify_password(user.contrasena, db_albergue.contrasena):
         raise HTTPException(status_code=401, detail="Credenciales incorrectas")
 
-    token_data = {"sub": str(alber.id), "rol": "albergue", "albergue_id": alber.id}
+    token_data = {
+        "sub": str(db_albergue.id),
+        "rol": "albergue",
+        "albergue_id": db_albergue.id
+    }
     token = auth.create_access_token(token_data)
-    return {"access_token": token, "token_type": "bearer"}
+    return {"access_token": token, "token_type": "bearer", "albergue_id": db_albergue.id}
 
 # === ENDPOINT PROTEGIDO: OBTENER DATOS DEL ADOPTANTE ===
 @app.get("/adoptante/me", response_model=schemas.AdoptanteOut, summary="Obtener datos del adoptante autenticado")
@@ -157,53 +161,10 @@ def crear_mascota( mascota: schemas.MascotaCreate, db: Session = Depends(get_db)
         etiquetas=lista_etqs,
     )
     
-    
-
-## POR VERIFICAR Y CORREGIR
-
-@app.get("/mascotas")
-def obtener_mascotas(db: Session = Depends(get_db), user=Depends(get_current_user)):
-    mascotas = db.query(models.Mascota).all()
-    return mascotas
-
-@app.post("/mascotas")
-def agregar_mascota(
-    mascota: schemas.MascotaCreate,
-    db: Session = Depends(get_db),
-    user=Depends(get_current_user),
-):
-    # Solo albergues pueden agregar mascotas
-    if user["rol"] != "albergue":
-        raise HTTPException(status_code=403, detail="Solo los albergues pueden registrar mascotas")
-
-    nueva_mascota = models.Mascota(
-        nombre=mascota.nombre,
-        edad=mascota.edad,
-        especie=mascota.especie,
-        descripcion=mascota.descripcion,
-        imagen_id=mascota.imagen_id,
-        albergue_id=int(user["sub"]),
-    )
-    db.add(nueva_mascota)
-    db.commit()
-    db.refresh(nueva_mascota)
-    return nueva_mascota
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
+# POR VERIFICAR Y CORREGIR
 
 @app.post("/preguntas", response_model=schemas.PreguntaOut)
 def crear_pregunta(pregunta: schemas.PreguntaCreate, db: Session = Depends(get_db)):
