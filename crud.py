@@ -3,6 +3,8 @@ import models
 import schemas
 from passlib.hash import bcrypt
 import json
+import pytz
+from datetime import datetime
 
 # === ADOPTANTE ===
 def create_adoptante(db: Session, adoptante: schemas.AdoptanteRegister):
@@ -57,34 +59,27 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     return bcrypt.verify(plain_password, hashed_password)
 
 
-def create_mascota(db: Session, mascota_data: schemas.MascotaCreate, albergue_id: int):
-    db_mascota = models.Mascota(
-        nombre=mascota_data.nombre,
-        edad=mascota_data.edad,
-        especie=mascota_data.especie,
-        descripcion=mascota_data.descripcion,
-        imagen_id=mascota_data.imagen_id,
+def create_mascota(db: Session, mascota: schemas.MascotaCreate, albergue_id: int):
+    lima_tz = pytz.timezone("America/Lima")
+    ahora_lima = datetime.now(lima_tz)
+
+    nueva = models.Mascota(
+        nombre=mascota.nombre,
+        edad=mascota.edad,
+        especie=mascota.especie,
+        descripcion=mascota.descripcion,
+        imagen_id=mascota.imagen_id,
+        etiquetas=json.dumps(mascota.etiquetas),
         albergue_id=albergue_id,
-        etiquetas=json.dumps(mascota_data.etiquetas)  # supongamos que en el modelo tienes un campo JSON/texto
+        created_at=ahora_lima, 
     )
-    db.add(db_mascota)
+    db.add(nueva)
     db.commit()
-    db.refresh(db_mascota)
-    return db_mascota
+    db.refresh(nueva)
+    return nueva
 
 
 
-
-
-
-
-
-
-
-# POR VERIFICAR Y CORREGIR
-
-
-# === MASCOTAS ===
 def get_all_mascotas(db: Session):
     return db.query(models.Mascota).all()
 

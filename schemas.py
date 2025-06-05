@@ -77,22 +77,19 @@ class MascotaResponse(BaseModel):
     albergue_id: int
     imagen_id: int
     etiquetas: List[str]
+    created_at:str
 
     class Config:
         from_attributes = True
 
+class AlbergueOut(BaseModel):
+    id: int
+    nombre: str
+    telefono: str
+    correo: str
 
-
-
-
-
-
-
-
-
-
-
-
+    class Config:
+        from_attributes = True
 
 
 

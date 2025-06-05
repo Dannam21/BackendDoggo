@@ -1,6 +1,7 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, Text
+from sqlalchemy import Column, Integer, String, ForeignKey, Text, DateTime
 from sqlalchemy.orm import relationship
 from database import Base
+from sqlalchemy.sql import func
 
 class Adoptante(Base):
     __tablename__ = "adoptante"
@@ -27,6 +28,7 @@ class Albergue(Base):
     mascotas = relationship("Mascota", back_populates="albergue")
 
 
+
 class Mascota(Base):
     __tablename__ = "mascotas"
     id = Column(Integer, primary_key=True, index=True)
@@ -36,8 +38,9 @@ class Mascota(Base):
     descripcion = Column(String, nullable=True)
     albergue_id = Column(Integer, ForeignKey("albergue.id"))
     imagen_id = Column(Integer, ForeignKey("imagenes.id"))
-    etiquetas = Column(String, nullable=True) 
-    
+    etiquetas = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
     imagen = relationship("Imagen")
     albergue = relationship("Albergue", back_populates="mascotas")
 
