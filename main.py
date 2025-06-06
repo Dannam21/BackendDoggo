@@ -179,6 +179,7 @@ def crear_mascota(
         albergue_id=nueva.albergue_id,
         imagen_id=nueva.imagen_id,
         etiquetas=lista_etqs,
+        created_at=nueva.created_at.isoformat(),
     )
 
 
