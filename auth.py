@@ -1,9 +1,12 @@
 from datetime import datetime, timedelta
 from jose import JWTError, jwt
+from fastapi import HTTPException, Depends
+from fastapi.security import OAuth2PasswordBearer
 
 SECRET_KEY = "supersecreto"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")  # solo se usa para extraer el token
 
 def create_access_token(data: dict):
     to_encode = data.copy()
@@ -17,3 +20,9 @@ def verify_token(token: str):
         return payload
     except JWTError:
         return None
+    
+def get_current_user(token: str = Depends(oauth2_scheme)):
+    payload = verify_token(token)
+    if not payload:
+        raise HTTPException(status_code=401, detail="Token inválido")
+    return payload
