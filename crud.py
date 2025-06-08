@@ -5,7 +5,7 @@ from passlib.hash import bcrypt
 import json
 import pytz
 from datetime import datetime
-
+from models import Mascota
 # === ADOPTANTE ===
 def create_adoptante(db: Session, adoptante: schemas.AdoptanteRegister):
     hashed_pw = bcrypt.hash(adoptante.contrasena)
@@ -144,3 +144,4 @@ def obtener_matches(db: Session, usuario_actual_id: int, k=3):
     vecinos_ids = [ids[i] for i in indices[0] if ids[i] != usuario_actual_id]
 
     return vecinos_ids
+

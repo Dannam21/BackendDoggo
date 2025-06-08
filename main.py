@@ -183,6 +183,51 @@ def crear_mascota(
     )
 
 
+@app.put("/mascotas/{mascota_id}", response_model=schemas.MascotaResponse)
+def editar_mascota(
+    mascota_id: int,
+    mascota: schemas.MascotaUpdate,
+    db: Session = Depends(get_db),
+    user = Depends(get_current_user)
+):
+    # Solo los albergues pueden editar mascotas
+    if user["rol"] != "albergue":
+        raise HTTPException(status_code=403, detail="Solo los albergues pueden editar mascotas")
+
+    # Verificamos si la mascota existe
+    db_mascota = db.query(models.Mascota).filter(models.Mascota.id == mascota_id).first()
+    if not db_mascota:
+        raise HTTPException(status_code=404, detail="Mascota no encontrada")
+
+    # Verificamos si el albergue que intenta editar es el dueño de la mascota
+    if db_mascota.albergue_id != int(user["albergue_id"]):
+        raise HTTPException(status_code=403, detail="No tiene permiso para editar esta mascota")
+
+    # Actualizamos los campos de la mascota
+    db_mascota.nombre = mascota.nombre if mascota.nombre else db_mascota.nombre
+    db_mascota.edad = mascota.edad if mascota.edad else db_mascota.edad
+    db_mascota.especie = mascota.especie if mascota.especie else db_mascota.especie
+    db_mascota.descripcion = mascota.descripcion if mascota.descripcion else db_mascota.descripcion
+    db_mascota.etiquetas = json.dumps(mascota.etiquetas) if mascota.etiquetas else db_mascota.etiquetas
+
+    # Guardamos los cambios
+    db.commit()
+    db.refresh(db_mascota)
+
+    # Retornamos la mascota actualizada
+    return schemas.MascotaResponse(
+        id=db_mascota.id,
+        nombre=db_mascota.nombre,
+        edad=db_mascota.edad,
+        especie=db_mascota.especie,
+        descripcion=db_mascota.descripcion,
+        albergue_id=db_mascota.albergue_id,
+        imagen_id=db_mascota.imagen_id,
+        etiquetas=json.loads(db_mascota.etiquetas) if db_mascota.etiquetas else [],
+        created_at=db_mascota.created_at.isoformat(),
+    )
+
+
 UPLOAD_DIR = "imagenes"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
@@ -286,6 +331,23 @@ def calcular_similitudes(
 ) -> List[float]:
     sims = cosine_similarity([vector_adoptante], vectores_mascotas)[0]
     return [float(s) for s in sims]
+
+from schemas import MascotaResponse
+@app.get("/mascotas/{mascota_id}", response_model=MascotaResponse)
+def obtener_mascota_por_id(mascota_id: int, db: Session = Depends(get_db)):
+    mascota = db.query(Mascota).filter(Mascota.id == mascota_id).first()
+    if not mascota:
+        raise HTTPException(status_code=404, detail="Mascota no encontrada")
+
+    # Reparar etiquetas si es un string (viene como JSON guardado en la DB)
+    if isinstance(mascota.etiquetas, str):
+        mascota.etiquetas = json.loads(mascota.etiquetas)
+
+    # Convertir created_at a string ISO
+    mascota.created_at = mascota.created_at.isoformat()
+
+    return mascota
+
 
 @app.get("/recomendaciones/{adoptante_id}")
 def obtener_recomendaciones(
