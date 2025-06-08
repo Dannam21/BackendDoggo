@@ -11,6 +11,7 @@ class AdoptanteRegister(BaseModel):
     contrasena: str
     etiquetas: List[str] = []
 
+
 class AlbergueRegister(BaseModel):
     nombre: str
     ruc: str
@@ -60,28 +61,41 @@ class AdoptanteOut(BaseModel):
         )
 
 
+#=====MASCOTA=======
 class MascotaCreate(BaseModel):
     nombre: str
-    edad: str
+    edad: int
     especie: str
     descripcion: Optional[str]
     imagen_id: int
     etiquetas: List[str]
+    genero: Optional[str]
 
 class MascotaResponse(BaseModel):
     id: int
     nombre: str
-    edad: str
+    edad: int
     especie: str
     descripcion: Optional[str]
     albergue_id: int
     imagen_id: int
     etiquetas: List[str]  
     created_at: str
+    genero: Optional[str]
 
     class Config:
         from_attributes = True
 
+
+class MascotaUpdate(BaseModel):
+    nombre: str = None
+    edad: int
+    especie: str = None
+    descripcion: str = None
+    etiquetas: List[str] = []
+
+
+# === OUTPUT DEL ALBERGUE ===
 class AlbergueOut(BaseModel):
     id: int
     nombre: str
@@ -149,10 +163,3 @@ class RespuestaUsuarioOut(BaseModel):
     class Config:
         from_attributes = True
 
-
-class MascotaUpdate(BaseModel):
-    nombre: str = None
-    edad: int = None
-    especie: str = None
-    descripcion: str = None
-    etiquetas: List[str] = []

@@ -174,6 +174,7 @@ def crear_mascota(
         id=nueva.id,
         nombre=nueva.nombre,
         edad=nueva.edad,
+        genero=nueva.genero,
         especie=nueva.especie,
         descripcion=nueva.descripcion,
         albergue_id=nueva.albergue_id,
@@ -219,6 +220,7 @@ def editar_mascota(
         id=db_mascota.id,
         nombre=db_mascota.nombre,
         edad=db_mascota.edad,
+        genero=db_mascota.genero,
         especie=db_mascota.especie,
         descripcion=db_mascota.descripcion,
         albergue_id=db_mascota.albergue_id,
@@ -398,11 +400,6 @@ def obtener_recomendaciones(
 
     # 7) Devolvemos la lista como JSON
     return lista_mascotas
-
-
-
-
-
 
 
 # === Rutas adicionales (preguntas y respuestas de ejemplo) ===
