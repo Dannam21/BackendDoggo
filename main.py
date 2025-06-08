@@ -292,6 +292,7 @@ def listar_todas_las_mascotas(db: Session = Depends(get_db)):
                 nombre=m.nombre,
                 edad=m.edad,
                 especie=m.especie,
+                genero=m.genero,
                 descripcion=m.descripcion,
                 albergue_id=m.albergue_id,
                 imagen_id=m.imagen_id,
@@ -337,15 +338,13 @@ def calcular_similitudes(
 from schemas import MascotaResponse
 @app.get("/mascotas/{mascota_id}", response_model=MascotaResponse)
 def obtener_mascota_por_id(mascota_id: int, db: Session = Depends(get_db)):
-    mascota = db.query(Mascota).filter(Mascota.id == mascota_id).first()
+    mascota = db.query(models.Mascota).filter(models.Mascota.id == mascota_id).first()
     if not mascota:
         raise HTTPException(status_code=404, detail="Mascota no encontrada")
 
-    # Reparar etiquetas si es un string (viene como JSON guardado en la DB)
     if isinstance(mascota.etiquetas, str):
         mascota.etiquetas = json.loads(mascota.etiquetas)
 
-    # Convertir created_at a string ISO
     mascota.created_at = mascota.created_at.isoformat()
 
     return mascota

@@ -69,7 +69,7 @@ class MascotaCreate(BaseModel):
     descripcion: Optional[str]
     imagen_id: int
     etiquetas: List[str]
-    genero: Optional[str]
+    genero: str
 
 class MascotaResponse(BaseModel):
     id: int

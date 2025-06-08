@@ -67,6 +67,7 @@ def create_mascota(db: Session, mascota: schemas.MascotaCreate, albergue_id: int
         nombre=mascota.nombre,
         edad=mascota.edad,
         especie=mascota.especie,
+        genero=mascota.genero,  
         descripcion=mascota.descripcion,
         imagen_id=mascota.imagen_id,
         etiquetas=json.dumps(mascota.etiquetas),
@@ -85,15 +86,6 @@ def get_all_mascotas(db: Session):
 
 def get_mascotas_por_albergue(db: Session, albergue_id: int):
     return db.query(models.Mascota).filter(models.Mascota.albergue_id == albergue_id).all()
-
-
-
-
-
-
-
-
-
 
 
 
