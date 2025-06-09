@@ -129,6 +129,14 @@ def obtener_mascotas_por_albergue(
                 lista_etqs = json.loads(m.etiquetas)
             except Exception:
                 lista_etqs = []
+
+        lista_vacunas = []
+        if m.vacunas:
+            try:
+                lista_vacunas = json.loads(m.vacunas)
+            except Exception:
+                lista_vacunas = []
+
         created_at_str = m.created_at.isoformat() if isinstance(m.created_at, datetime) else str(m.created_at)
 
         resultado.append(
@@ -137,10 +145,12 @@ def obtener_mascotas_por_albergue(
                 nombre=m.nombre,
                 edad=m.edad,
                 especie=m.especie,
+                genero=m.genero,
                 descripcion=m.descripcion,
                 albergue_id=m.albergue_id,
                 imagen_id=m.imagen_id,
                 etiquetas=lista_etqs,
+                vacunas=lista_vacunas,
                 created_at=created_at_str,
             )
         )
@@ -170,16 +180,68 @@ def crear_mascota(
         except Exception:
             lista_etqs = []
 
+    lista_vacunas = []
+    if nueva.vacunas:
+        try:
+            lista_vacunas = json.loads(nueva.vacunas)
+        except Exception:
+            lista_vacunas = []
+
     return schemas.MascotaResponse(
         id=nueva.id,
         nombre=nueva.nombre,
         edad=nueva.edad,
+        genero=nueva.genero,
         especie=nueva.especie,
         descripcion=nueva.descripcion,
         albergue_id=nueva.albergue_id,
         imagen_id=nueva.imagen_id,
         etiquetas=lista_etqs,
+        vacunas=lista_vacunas,
         created_at=nueva.created_at.isoformat(),
+    )
+
+
+@app.put("/mascotas/{mascota_id}", response_model=schemas.MascotaResponse)
+def editar_mascota(
+    mascota_id: int,
+    mascota: schemas.MascotaUpdate,
+    db: Session = Depends(get_db),
+    user = Depends(get_current_user)
+):
+    if user["rol"] != "albergue":
+        raise HTTPException(status_code=403, detail="Solo los albergues pueden editar mascotas")
+
+    db_mascota = db.query(models.Mascota).filter(models.Mascota.id == mascota_id).first()
+    if not db_mascota:
+        raise HTTPException(status_code=404, detail="Mascota no encontrada")
+
+    if db_mascota.albergue_id != int(user["albergue_id"]):
+        raise HTTPException(status_code=403, detail="No tiene permiso para editar esta mascota")
+
+    # Actualizamos campos (si vienen en la solicitud)
+    db_mascota.nombre = mascota.nombre if mascota.nombre else db_mascota.nombre
+    db_mascota.edad = mascota.edad if mascota.edad else db_mascota.edad
+    db_mascota.especie = mascota.especie if mascota.especie else db_mascota.especie
+    db_mascota.descripcion = mascota.descripcion if mascota.descripcion else db_mascota.descripcion
+    db_mascota.etiquetas = json.dumps(mascota.etiquetas) if mascota.etiquetas else db_mascota.etiquetas
+    db_mascota.vacunas = json.dumps(mascota.vacunas) if mascota.vacunas else db_mascota.vacunas
+
+    db.commit()
+    db.refresh(db_mascota)
+
+    return schemas.MascotaResponse(
+        id=db_mascota.id,
+        nombre=db_mascota.nombre,
+        edad=db_mascota.edad,
+        genero=db_mascota.genero,
+        especie=db_mascota.especie,
+        descripcion=db_mascota.descripcion,
+        albergue_id=db_mascota.albergue_id,
+        imagen_id=db_mascota.imagen_id,
+        etiquetas=json.loads(db_mascota.etiquetas) if db_mascota.etiquetas else [],
+        vacunas=json.loads(db_mascota.vacunas) if db_mascota.vacunas else [],  # 👈 agregado aquí
+        created_at=db_mascota.created_at.isoformat(),
     )
 
 
@@ -237,6 +299,14 @@ def listar_todas_las_mascotas(db: Session = Depends(get_db)):
                 lista_etqs = json.loads(m.etiquetas)
             except Exception:
                 lista_etqs = []
+
+        lista_vacunas = []
+        if m.vacunas:
+            try:
+                lista_vacunas = json.loads(m.vacunas)
+            except Exception:
+                lista_vacunas = []
+
         created_at_str = m.created_at.isoformat() if isinstance(m.created_at, datetime) else str(m.created_at)
 
         resultado.append(
@@ -245,14 +315,17 @@ def listar_todas_las_mascotas(db: Session = Depends(get_db)):
                 nombre=m.nombre,
                 edad=m.edad,
                 especie=m.especie,
+                genero=m.genero,
                 descripcion=m.descripcion,
                 albergue_id=m.albergue_id,
                 imagen_id=m.imagen_id,
                 etiquetas=lista_etqs,
+                vacunas=lista_vacunas,
                 created_at=created_at_str,
             )
         )
     return resultado
+
 
 def parsear_etiquetas(texto: str) -> List[str]:
     if not texto:
@@ -286,6 +359,21 @@ def calcular_similitudes(
 ) -> List[float]:
     sims = cosine_similarity([vector_adoptante], vectores_mascotas)[0]
     return [float(s) for s in sims]
+
+from schemas import MascotaResponse
+@app.get("/mascotas/{mascota_id}", response_model=MascotaResponse)
+def obtener_mascota_por_id(mascota_id: int, db: Session = Depends(get_db)):
+    mascota = db.query(models.Mascota).filter(models.Mascota.id == mascota_id).first()
+    if not mascota:
+        raise HTTPException(status_code=404, detail="Mascota no encontrada")
+
+    if isinstance(mascota.etiquetas, str):
+        mascota.etiquetas = json.loads(mascota.etiquetas)
+
+    mascota.created_at = mascota.created_at.isoformat()
+
+    return mascota
+
 
 @app.get("/recomendaciones/{adoptante_id}")
 def obtener_recomendaciones(
@@ -377,11 +465,6 @@ def obtener_mascota(
         etiquetas=etiquetas,
         created_at=created_at_str,  
     )
-
-
-
-
-
 
 
 
