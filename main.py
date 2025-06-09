@@ -1,16 +1,16 @@
 import shutil, os, json
-import numpy as np
+import numpy as np # type: ignore
 from typing import List, Dict, Tuple
 from datetime import datetime
 import models, schemas, crud, auth
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session # type: ignore
 from database import SessionLocal, engine
-from fastapi.responses import FileResponse
-from fastapi.security import OAuth2PasswordBearer
-from fastapi.middleware.cors import CORSMiddleware
-from sklearn.preprocessing import MultiLabelBinarizer
-from sklearn.metrics.pairwise import cosine_similarity
-from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
+from fastapi.responses import FileResponse # type: ignore
+from fastapi.security import OAuth2PasswordBearer # type: ignore
+from fastapi.middleware.cors import CORSMiddleware # type: ignore
+from sklearn.preprocessing import MultiLabelBinarizer # type: ignore
+from sklearn.metrics.pairwise import cosine_similarity # type: ignore
+from fastapi import FastAPI, Depends, HTTPException, UploadFile, File # type: ignore
 from models import Adoptante, Albergue, Mascota, Imagen
 
 models.Base.metadata.create_all(bind=engine)
@@ -336,6 +336,50 @@ def obtener_recomendaciones(
 
     # 7) Devolvemos la lista como JSON
     return lista_mascotas
+
+@app.get(
+    "/mascotas/{mascota_id}",
+    response_model=schemas.MascotaResponse,
+    summary="Obtener datos de una mascota por su ID",
+)
+def obtener_mascota(
+    mascota_id: int,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    # Opcional: aquí podrías chequear permisos si quieres
+    m = db.query(models.Mascota).filter(models.Mascota.id == mascota_id).first()
+    if not m:
+        raise HTTPException(status_code=404, detail="Mascota no encontrada")
+
+    etiquetas = []
+    if m.etiquetas:
+        try:
+            etiquetas = json.loads(m.etiquetas)
+        except:
+            etiquetas = []
+
+    # Convertir created_at a string ISO (si lo usas en frontend)
+    created_at_str = (
+        m.created_at.isoformat()
+        if isinstance(m.created_at, datetime)
+        else str(m.created_at)
+    )
+
+    return schemas.MascotaResponse(
+        id=m.id,
+        nombre=m.nombre,
+        edad=m.edad,
+        especie=m.especie,
+        descripcion=m.descripcion,
+        albergue_id=m.albergue_id,
+        imagen_id=m.imagen_id,
+        etiquetas=etiquetas,
+        created_at=created_at_str,  
+    )
+
+
+
 
 
 

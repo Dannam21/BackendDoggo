@@ -1,7 +1,7 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, Text, DateTime
-from sqlalchemy.orm import relationship
+from sqlalchemy import Column, Integer, String, ForeignKey, Text, DateTime # type: ignore
+from sqlalchemy.orm import relationship # type: ignore
 from database import Base
-from sqlalchemy.sql import func
+from sqlalchemy.sql import func # type: ignore
 
 class Adoptante(Base):
     __tablename__ = "adoptante"
