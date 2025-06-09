@@ -71,6 +71,7 @@ def create_mascota(db: Session, mascota: schemas.MascotaCreate, albergue_id: int
         descripcion=mascota.descripcion,
         imagen_id=mascota.imagen_id,
         etiquetas=json.dumps(mascota.etiquetas),
+        vacunas=json.dumps(mascota.vacunas),  # 👈 Agregado aquí
         albergue_id=albergue_id,
         created_at=ahora_lima, 
     )
@@ -78,6 +79,7 @@ def create_mascota(db: Session, mascota: schemas.MascotaCreate, albergue_id: int
     db.commit()
     db.refresh(nueva)
     return nueva
+
 
 
 

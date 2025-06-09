@@ -70,6 +70,8 @@ class MascotaCreate(BaseModel):
     imagen_id: int
     etiquetas: List[str]
     genero: str
+    vacunas: List[str] = []  # NUEVO CAMPO
+
 
 class MascotaResponse(BaseModel):
     id: int
@@ -79,7 +81,8 @@ class MascotaResponse(BaseModel):
     descripcion: Optional[str]
     albergue_id: int
     imagen_id: int
-    etiquetas: List[str]  
+    etiquetas: List[str]
+    vacunas: List[str] = []  # NUEVO CAMPO
     created_at: str
     genero: Optional[str]
 
@@ -88,11 +91,13 @@ class MascotaResponse(BaseModel):
 
 
 class MascotaUpdate(BaseModel):
-    nombre: str = None
-    edad: int
-    especie: str = None
-    descripcion: str = None
+    nombre: Optional[str] = None
+    edad: Optional[int] = None
+    especie: Optional[str] = None
+    descripcion: Optional[str] = None
     etiquetas: List[str] = []
+    vacunas: List[str] = []  # NUEVO CAMPO
+
 
 
 # === OUTPUT DEL ALBERGUE ===

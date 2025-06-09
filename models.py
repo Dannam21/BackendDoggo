@@ -33,6 +33,8 @@ class Albergue(Base):
 
 
 #=====MASCOTA=======
+from sqlalchemy import Text
+
 class Mascota(Base):
     __tablename__ = "mascotas"
     id = Column(Integer, primary_key=True, index=True)
@@ -43,8 +45,9 @@ class Mascota(Base):
     albergue_id = Column(Integer, ForeignKey("albergue.id"))
     imagen_id = Column(Integer, ForeignKey("imagenes.id"))
     etiquetas = Column(String, nullable=True)
+    vacunas = Column(Text, nullable=True)  # NUEVO CAMPO
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    genero = Column(String, nullable=False)    # Nuevo campo para género
+    genero = Column(String, nullable=False)
 
     imagen = relationship("Imagen")
     albergue = relationship("Albergue", back_populates="mascotas")
