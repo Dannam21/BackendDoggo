@@ -67,9 +67,11 @@ def create_mascota(db: Session, mascota: schemas.MascotaCreate, albergue_id: int
         nombre=mascota.nombre,
         edad=mascota.edad,
         especie=mascota.especie,
+        genero=mascota.genero,  
         descripcion=mascota.descripcion,
         imagen_id=mascota.imagen_id,
         etiquetas=json.dumps(mascota.etiquetas),
+        vacunas=json.dumps(mascota.vacunas),  # 👈 Agregado aquí
         albergue_id=albergue_id,
         created_at=ahora_lima, 
     )
@@ -80,20 +82,12 @@ def create_mascota(db: Session, mascota: schemas.MascotaCreate, albergue_id: int
 
 
 
+
 def get_all_mascotas(db: Session):
     return db.query(models.Mascota).all()
 
 def get_mascotas_por_albergue(db: Session, albergue_id: int):
     return db.query(models.Mascota).filter(models.Mascota.albergue_id == albergue_id).all()
-
-
-
-
-
-
-
-
-
 
 
 

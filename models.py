@@ -3,6 +3,8 @@ from sqlalchemy.orm import relationship
 from database import Base
 from sqlalchemy.sql import func
 
+
+#=====ADOPTANTE=======
 class Adoptante(Base):
     __tablename__ = "adoptante"
     id = Column(Integer, primary_key=True, index=True)
@@ -16,6 +18,8 @@ class Adoptante(Base):
 
     respuestas_usuario = relationship("RespuestaUsuario", back_populates="adoptante")
 
+
+#=====ALBERGUE=======
 class Albergue(Base):
     __tablename__ = "albergue"
     id = Column(Integer, primary_key=True, index=True)
@@ -28,22 +32,27 @@ class Albergue(Base):
     mascotas = relationship("Mascota", back_populates="albergue")
 
 
+#=====MASCOTA=======
+from sqlalchemy import Text
 
 class Mascota(Base):
     __tablename__ = "mascotas"
     id = Column(Integer, primary_key=True, index=True)
     nombre = Column(String, index=True)
     especie = Column(String)
-    edad = Column(String)
+    edad = Column(Integer)
     descripcion = Column(String, nullable=True)
     albergue_id = Column(Integer, ForeignKey("albergue.id"))
     imagen_id = Column(Integer, ForeignKey("imagenes.id"))
     etiquetas = Column(String, nullable=True)
+    vacunas = Column(Text, nullable=True)  # NUEVO CAMPO
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    genero = Column(String, nullable=False)
 
     imagen = relationship("Imagen")
     albergue = relationship("Albergue", back_populates="mascotas")
 
+#=====IMAGEN=======
 class Imagen(Base):
     __tablename__ = "imagenes"
     id = Column(Integer, primary_key=True, index=True)
@@ -51,12 +60,7 @@ class Imagen(Base):
 
 
 
-
-
-
-## POR VERIFICAR Y CORREGIR
-
-
+#=====PREGUNTAS Y RESPUESTAS=======
 class Pregunta(Base):
     __tablename__ = "preguntas"
     id = Column(Integer, primary_key=True, index=True)
