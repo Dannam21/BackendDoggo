@@ -361,15 +361,19 @@ def calcular_similitudes(
     return [float(s) for s in sims]
 
 from schemas import MascotaResponse
-@app.get("/mascotas/{mascota_id}", response_model=MascotaResponse)
+@app.get("/usuario/mascotas/{mascota_id}", response_model=MascotaResponse)
 def obtener_mascota_por_id(mascota_id: int, db: Session = Depends(get_db)):
     mascota = db.query(models.Mascota).filter(models.Mascota.id == mascota_id).first()
     if not mascota:
         raise HTTPException(status_code=404, detail="Mascota no encontrada")
 
+    # Convertir campos string a lista si es necesario
     if isinstance(mascota.etiquetas, str):
         mascota.etiquetas = json.loads(mascota.etiquetas)
+    if isinstance(mascota.vacunas, str):
+        mascota.vacunas = json.loads(mascota.vacunas)
 
+    # Convertir datetime a string ISO
     mascota.created_at = mascota.created_at.isoformat()
 
     return mascota

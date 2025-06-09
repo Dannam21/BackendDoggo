@@ -82,7 +82,7 @@ class MascotaResponse(BaseModel):
     albergue_id: int
     imagen_id: int
     etiquetas: List[str]
-    vacunas: List[str] = []  # NUEVO CAMPO
+    vacunas: List[str]
     created_at: str
     genero: Optional[str]
 
