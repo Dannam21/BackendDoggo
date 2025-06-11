@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
-from jose import JWTError, jwt
-from fastapi import HTTPException, Depends
-from fastapi.security import OAuth2PasswordBearer
+from jose import JWTError, jwt # type: ignore
+from fastapi import HTTPException, Depends # type: ignore
+from fastapi.security import OAuth2PasswordBearer # type: ignore
 
 SECRET_KEY = "supersecreto"
 ALGORITHM = "HS256"

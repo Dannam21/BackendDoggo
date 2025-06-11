@@ -1,10 +1,11 @@
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session # type: ignore
 import models
 import schemas
-from passlib.hash import bcrypt
+from passlib.hash import bcrypt # type: ignore
 import json
-import pytz
-from datetime import datetime
+import pytz # type: ignore
+from datetime import datetime 
+from models import Mascota
 
 # === ADOPTANTE ===
 def create_adoptante(db: Session, adoptante: schemas.AdoptanteRegister):
@@ -67,9 +68,11 @@ def create_mascota(db: Session, mascota: schemas.MascotaCreate, albergue_id: int
         nombre=mascota.nombre,
         edad=mascota.edad,
         especie=mascota.especie,
+        genero=mascota.genero,  
         descripcion=mascota.descripcion,
         imagen_id=mascota.imagen_id,
         etiquetas=json.dumps(mascota.etiquetas),
+        vacunas=json.dumps(mascota.vacunas),  # 👈 Agregado aquí
         albergue_id=albergue_id,
         created_at=ahora_lima, 
     )
@@ -77,6 +80,7 @@ def create_mascota(db: Session, mascota: schemas.MascotaCreate, albergue_id: int
     db.commit()
     db.refresh(nueva)
     return nueva
+
 
 
 
@@ -88,18 +92,9 @@ def get_mascotas_por_albergue(db: Session, albergue_id: int):
 
 
 
-
-
-
-
-
-
-
-
-
 # === PREGUNTAS ===
-from sklearn.neighbors import NearestNeighbors
-import numpy as np
+from sklearn.neighbors import NearestNeighbors # type: ignore
+import numpy as np # type: ignore
 
 def create_pregunta(db: Session, pregunta: schemas.PreguntaCreate):
     db_pregunta = models.Pregunta(texto=pregunta.texto)
@@ -144,3 +139,4 @@ def obtener_matches(db: Session, usuario_actual_id: int, k=3):
     vecinos_ids = [ids[i] for i in indices[0] if ids[i] != usuario_actual_id]
 
     return vecinos_ids
+
