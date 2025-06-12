@@ -20,6 +20,7 @@ class MascotaResponse(BaseModel):
     especie: str
     descripcion: Optional[str]
     albergue_id: int
+    albergue_nombre: Optional[str] = None 
     imagen_id: int
     etiquetas: List[str]
     vacunas: List[str]

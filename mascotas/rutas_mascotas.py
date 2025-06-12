@@ -58,6 +58,7 @@ def listar_todas_las_mascotas(db: Session = Depends(get_db)):
             genero=m.genero,
             descripcion=m.descripcion,
             albergue_id=m.albergue_id,
+            albergue_nombre=m.albergue.nombre if m.albergue else None,
             imagen_id=m.imagen_id,
             etiquetas=json.loads(m.etiquetas) if m.etiquetas else [],
             vacunas=json.loads(m.vacunas) if m.vacunas else [],
