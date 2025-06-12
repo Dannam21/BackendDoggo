@@ -10,7 +10,8 @@ from fastapi.security import OAuth2PasswordBearer  # type: ignore
 from sklearn.preprocessing import MultiLabelBinarizer  # type: ignore
 from sklearn.metrics.pairwise import cosine_similarity  # type: ignore
 from usuario import auth_usuario, schemas_usuario, modelos_usuario
-from mascotas import crud_mascotas
+from usuario import crud_usuario 
+from usuario.crud_usuario import get_adoptante_by_correo
 
 router = APIRouter()
 
@@ -33,7 +34,7 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
 @router.post("/login/adoptante")
 def login_adoptante(user: schemas_usuario.AdoptanteLogin, db: Session = Depends(get_db)):
     adopt = db.query(modelos_usuario.Adoptante).filter(modelos_usuario.Adoptante.correo == user.correo).first()
-    if not adopt or not crud_mascotas.verify_password(user.contrasena, adopt.contrasena):
+    if not adopt or not crud_usuario.verify_password(user.contrasena, adopt.contrasena):
         raise HTTPException(status_code=401, detail="Credenciales incorrectas")
 
     token_data = {"sub": str(adopt.id), "rol": "adoptante"}
@@ -47,12 +48,12 @@ from usuario.crud_usuario import get_adoptante_by_correo
 # Register
 @router.post("/register/adoptante")
 def register_adoptante(user: schemas_usuario.AdoptanteRegister, db: Session = Depends(get_db)):
-    if rutas_usuario.get_adoptante_by_correo(db, user.correo):
+    if get_adoptante_by_correo(db, user.correo):
         raise HTTPException(status_code=400, detail="El correo ya está registrado")
     if db.query(modelos_usuario.Adoptante).filter(modelos_usuario.Adoptante.dni == user.dni).first():
         raise HTTPException(status_code=400, detail="El DNI ya está registrado")
 
-    new_adoptante = crud_mascotas.create_adoptante(db, user)
+    new_adoptante = crud_usuario.create_adoptante(db, user)
     return {"mensaje": "Adoptante registrado con éxito", "id": new_adoptante.id}
 
 # Obtener perfil del adoptante
