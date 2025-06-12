@@ -3,6 +3,13 @@ from typing import Optional, List
 import json
 
 
+class AlbergueRegister(BaseModel):
+    nombre: str
+    ruc: str
+    correo: str
+    contrasena: str
+    telefono: Optional[str] = None
+
 # OUTPUT DEL ALBERGUE 
 class AlbergueOut(BaseModel):
     id: int

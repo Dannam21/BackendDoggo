@@ -4,6 +4,8 @@ from albergue import modelos_albergue, schemas_albergue, modelos_albergue
 from passlib.hash import bcrypt # type: ignore
 import pytz # type: ignore
 from datetime import datetime 
+from albergue import crud_albergue
+
 
 # === ALBERGUE ===
 def create_albergue(db: Session, albergue: schemas_albergue.AlbergueRegister):

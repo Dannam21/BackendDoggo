@@ -5,7 +5,7 @@ from fastapi.security import OAuth2PasswordBearer
 
 from albergue import modelos_albergue, schemas_albergue
 from usuario import auth_usuario, schemas_usuario
-from mascotas import crud_mascotas
+from albergue import crud_albergue
 from usuario.auth_usuario import get_current_user
 
 router = APIRouter()
@@ -22,17 +22,17 @@ def get_db():
 
 @router.post("/register/albergue")
 def register_albergue(user: schemas_albergue.AlbergueCreate, db: Session = Depends(get_db)):
-    if crud_mascotas.get_albergue_by_correo(db, user.correo):
+    if crud_albergue.get_albergue_by_correo(db, user.correo):
         raise HTTPException(status_code=400, detail="El correo ya está registrado")
 
-    new_albergue = crud_mascotas.create_albergue(db, user)
+    new_albergue = crud_albergue.create_albergue(db, user)
     return {"mensaje": "Albergue registrado con éxito", "id": new_albergue.id}
 
 
 @router.post("/login/albergue")
 def login_albergue(user: schemas_usuario.AlbergueLogin, db: Session = Depends(get_db)):
-    db_albergue = crud_mascotas.get_albergue_by_correo(db, user.correo)
-    if not db_albergue or not crud_mascotas.verify_password(user.contrasena, db_albergue.contrasena):
+    db_albergue = crud_albergue.get_albergue_by_correo(db, user.correo)
+    if not db_albergue or not crud_albergue.verify_password(user.contrasena, db_albergue.contrasena):
         raise HTTPException(status_code=401, detail="Credenciales incorrectas")
 
     token_data = {
