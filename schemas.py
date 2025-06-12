@@ -10,7 +10,7 @@ class AdoptanteRegister(BaseModel):
     correo: str
     contrasena: str
     etiquetas: List[str] = []
-    imagen_perfil_id: Optional[int] = None 
+    imagen_perfil_id: int
 
 
 class AlbergueRegister(BaseModel):
@@ -38,7 +38,7 @@ class AdoptanteOut(BaseModel):
     correo: str
     telefono: Optional[str]
     etiquetas: List[str]
-    imagen_perfil_id: Optional[int] 
+    imagen_perfil_id: int
 
     class Config:
         from_attributes = True
@@ -63,6 +63,14 @@ class AdoptanteOut(BaseModel):
             imagen_perfil_id=adoptante_obj.imagen_perfil_id,
         )
 
+class AdoptanteCreate(BaseModel):
+    nombre: str
+    apellido: str
+    dni: str
+    correo: str
+    contrasena: str
+    telefono: Optional[str] = None
+    imagen_perfil_id: int
 
 #=====MASCOTA=======
 class MascotaCreate(BaseModel):
@@ -111,18 +119,6 @@ class AlbergueOut(BaseModel):
 
     class Config:
         from_attributes = True
-
-
-# === CREACIÓN INTERNA (CRUD) ===
-class AdoptanteCreate(BaseModel):
-    nombre: str
-    apellido: str
-    dni: str
-    correo: str
-    contrasena: str
-    telefono: Optional[str] = None
-    imagen_perfil_id: Optional[int] = None
-
 
 class AlbergueCreate(BaseModel):
     nombre: str

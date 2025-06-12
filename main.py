@@ -14,7 +14,6 @@ from fastapi import FastAPI, Depends, HTTPException, UploadFile, File # type: ig
 from models import Adoptante, Albergue, Mascota, Imagen
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-
 router = APIRouter()
 
 models.Base.metadata.create_all(bind=engine)
@@ -32,6 +31,7 @@ app.add_middleware(
     allow_methods=["*"],          
     allow_headers=["*"],          
 )
+
 
 def get_db():
     db = SessionLocal()
@@ -62,8 +62,8 @@ def register_adoptante(user: schemas.AdoptanteRegister, db: Session = Depends(ge
         raise HTTPException(status_code=400, detail="El DNI ya está registrado")
     
     # Verificar que la imagen existe si se proporciona
-    if user.imagen_id:
-        imagen = db.query(models.Imagen).filter(models.Imagen.id == user.imagen_id).first()
+    if user.imagen_perfil_id:
+        imagen = db.query(models.Imagen).filter(models.Imagen.id == user.imagen_perfil_id).first()
         if not imagen:
             raise HTTPException(status_code=400, detail="Imagen no encontrada")
 
@@ -71,21 +71,33 @@ def register_adoptante(user: schemas.AdoptanteRegister, db: Session = Depends(ge
     return {"mensaje": "Adoptante registrado con éxito", "id": new_adoptante.id}
 
 
-UPLOAD_DIR_PERFILES = "imagenes_perfil"
-os.makedirs(UPLOAD_DIR_PERFILES, exist_ok=True)
+UPLOAD_DIR_PERFILES2 = "imagenes_perfil"
+os.makedirs(UPLOAD_DIR_PERFILES2, exist_ok=True)
 
-@app.post("/imagenes", response_model=dict)
-def subir_imagen(image: UploadFile = File(...), db: Session = Depends(get_db)):
-    file_path = os.path.join(UPLOAD_DIR, image.filename)
+@app.post("/imagenesProfile", response_model=dict)
+def subir_imagen_profile(image: UploadFile = File(...), db: Session = Depends(get_db)):
+    file_path = os.path.join(UPLOAD_DIR_PERFILES2, image.filename)
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(image.file, buffer)
 
-    nueva_imagen = models.Imagen(ruta=file_path)
+    nueva_imagen = models.ImagenPerfil(ruta=file_path)
     db.add(nueva_imagen)
     db.commit()
     db.refresh(nueva_imagen)
     return {"id": nueva_imagen.id, "ruta": nueva_imagen.ruta}
 
+@app.get("/imagenesProfile/{imagen_id}")
+def obtener_imagen(imagen_id: int, db: Session = Depends(get_db)):
+    imagen = db.query(models.ImagenPerfil).filter(models.ImagenPerfil.id == imagen_id).first()
+    if not imagen:
+        raise HTTPException(status_code=404, detail="Imagen no encontrada")
+
+    file_path = imagen.ruta
+
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="Archivo de imagen no encontrado")
+
+    return FileResponse(file_path)
 
 
 
@@ -562,11 +574,20 @@ async def chat(websocket: WebSocket, user_id: int):
         # Aquí podrías procesar el mensaje, guardarlo y reenviarlo a otros sockets conectados
         await websocket.send_text(f"Mensaje recibido de {user_id}: {data}")
 
+from sqlalchemy.orm import joinedload
+
 @app.get("/adoptante/{adoptante_id}", response_model=schemas.AdoptanteOut, summary="Obtener adoptante por ID")
 def get_adoptante_by_id(adoptante_id: int, db: Session = Depends(get_db)):
-    adoptante = db.query(models.Adoptante).filter(models.Adoptante.id == adoptante_id).first()
+    adoptante = (
+        db.query(models.Adoptante)
+        .options(joinedload(models.Adoptante.imagen_perfil))  # Asegura que imagen_perfil esté cargado
+        .filter(models.Adoptante.id == adoptante_id)
+        .first()
+    )
+    
     if not adoptante:
         raise HTTPException(status_code=404, detail="Adoptante no encontrado")
+    
     return schemas.AdoptanteOut.from_orm_with_etiquetas(adoptante)
 
 @app.get("/albergue/{albergue_id}", response_model=schemas.AlbergueOut, summary="Obtener albergue por ID")
@@ -576,12 +597,17 @@ def get_albergue_by_id(albergue_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Albergue no encontrado")
     return albergue
 
-from models import Mensaje
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
+from models import Mensaje, Adoptante, Albergue
+from database import get_db
+
+
 @app.get("/mensajes/contactos")
 def obtener_contactos_conversados(emisor_id: int, emisor_tipo: str, db: Session = Depends(get_db)):
     mensajes = db.query(Mensaje).filter(
-        (Mensaje.emisor_id == emisor_id) & (Mensaje.emisor_tipo == emisor_tipo) |
-        (Mensaje.receptor_id == emisor_id) & (Mensaje.receptor_tipo == emisor_tipo)
+        ((Mensaje.emisor_id == emisor_id) & (Mensaje.emisor_tipo == emisor_tipo)) |
+        ((Mensaje.receptor_id == emisor_id) & (Mensaje.receptor_tipo == emisor_tipo))
     ).all()
 
     contactos = {}
@@ -598,12 +624,80 @@ def obtener_contactos_conversados(emisor_id: int, emisor_tipo: str, db: Session 
             user = db.query(Adoptante).filter_by(id=id_contacto).first()
         else:
             user = db.query(Albergue).filter_by(id=id_contacto).first()
+
         if user:
             resultado.append({
                 "userId": user.id,
                 "userType": tipo_contacto,
-                "name": user.nombre,
-                "avatar": user.avatar_url if hasattr(user, "avatar_url") else "https://i.pravatar.cc/150"
+                "name": getattr(user, "nombre", "Sin nombre"),
+                "avatar": getattr(user, "avatar_url", "https://i.pravatar.cc/150")
             })
 
     return resultado
+
+
+# chat_ws.py
+from fastapi import WebSocket, WebSocketDisconnect, Depends, APIRouter, Query
+from sqlalchemy.orm import Session
+from database import get_db
+from models import Mensaje
+from schemas import MessageIn, MessageOut
+from datetime import datetime
+
+active_connections = {}
+
+def get_user_key(user_id: int, user_type: str):
+    return f"{user_type}:{user_id}"
+
+@app.websocket("/ws/chat/{emisor_tipo}/{emisor_id}")
+async def websocket_chat(
+    websocket: WebSocket,
+    emisor_id: int,
+    emisor_tipo: str,
+    db: Session = Depends(get_db)
+):
+    await websocket.accept()
+
+    # Guardamos la conexión
+    key = get_user_key(emisor_id, emisor_tipo)
+    active_connections[key] = websocket
+
+    try:
+        while True:
+            data = await websocket.receive_json()
+
+            msg_in = MessageIn(**data)
+
+            # Guardamos el mensaje en la base de datos
+            mensaje_db = Mensaje(
+                emisor_id=emisor_id,
+                emisor_tipo=emisor_tipo,
+                receptor_id=msg_in.receptor_id,
+                receptor_tipo=msg_in.receptor_tipo,
+                contenido=msg_in.contenido,
+                timestamp=datetime.utcnow()
+            )
+            db.add(mensaje_db)
+            db.commit()
+            db.refresh(mensaje_db)
+
+            # Preparamos la respuesta
+            message_out = {
+                "emisor_id": emisor_id,
+                "emisor_tipo": emisor_tipo,
+                "receptor_id": msg_in.receptor_id,
+                "receptor_tipo": msg_in.receptor_tipo,
+                "contenido": msg_in.contenido,
+                "timestamp": mensaje_db.timestamp.isoformat()
+            }
+
+            # Enviamos al receptor si está conectado
+            receptor_key = get_user_key(msg_in.receptor_id, msg_in.receptor_tipo)
+            if receptor_key in active_connections:
+                await active_connections[receptor_key].send_json(message_out)
+
+            # También se lo enviamos al emisor (echo)
+            await websocket.send_json(message_out)
+
+    except WebSocketDisconnect:
+        del active_connections[key]

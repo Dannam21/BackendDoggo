@@ -4,7 +4,6 @@ from database import Base
 from sqlalchemy.sql import func # type: ignore
 
 
-#=====ADOPTANTE=======
 class Adoptante(Base):
     __tablename__ = "adoptante"
     id = Column(Integer, primary_key=True, index=True)
@@ -14,9 +13,11 @@ class Adoptante(Base):
     correo = Column(String, unique=True, index=True, nullable=False)
     telefono = Column(String, nullable=True)
     contrasena = Column(String, nullable=False)
-    etiquetas = Column(Text, nullable=True) 
-    imagen_perfil_id = Column(Integer, ForeignKey("imagenes_perfil.id"), nullable=True)
-    imagen_perfil = relationship("ImagenPerfil")
+    etiquetas = Column(Text, nullable=True)
+
+    imagen_perfil_id = Column(Integer, ForeignKey("imagenes_perfil.id"))
+    imagen_perfil = relationship("ImagenPerfil", backref="adoptantes")
+
 
 class ImagenPerfil(Base):
     __tablename__ = "imagenes_perfil"
