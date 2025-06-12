@@ -12,6 +12,10 @@ from sklearn.preprocessing import MultiLabelBinarizer # type: ignore
 from sklearn.metrics.pairwise import cosine_similarity # type: ignore
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File # type: ignore
 from models import Adoptante, Albergue, Mascota, Imagen
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+
+router = APIRouter()
 
 models.Base.metadata.create_all(bind=engine)
 
@@ -56,9 +60,33 @@ def register_adoptante(user: schemas.AdoptanteRegister, db: Session = Depends(ge
         raise HTTPException(status_code=400, detail="El correo ya está registrado")
     if db.query(models.Adoptante).filter(models.Adoptante.dni == user.dni).first():
         raise HTTPException(status_code=400, detail="El DNI ya está registrado")
+    
+    # Verificar que la imagen existe si se proporciona
+    if user.imagen_id:
+        imagen = db.query(models.Imagen).filter(models.Imagen.id == user.imagen_id).first()
+        if not imagen:
+            raise HTTPException(status_code=400, detail="Imagen no encontrada")
 
     new_adoptante = crud.create_adoptante(db, user)
     return {"mensaje": "Adoptante registrado con éxito", "id": new_adoptante.id}
+
+
+UPLOAD_DIR_PERFILES = "imagenes_perfil"
+os.makedirs(UPLOAD_DIR_PERFILES, exist_ok=True)
+
+@app.post("/imagenes", response_model=dict)
+def subir_imagen(image: UploadFile = File(...), db: Session = Depends(get_db)):
+    file_path = os.path.join(UPLOAD_DIR, image.filename)
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(image.file, buffer)
+
+    nueva_imagen = models.Imagen(ruta=file_path)
+    db.add(nueva_imagen)
+    db.commit()
+    db.refresh(nueva_imagen)
+    return {"id": nueva_imagen.id, "ruta": nueva_imagen.ruta}
+
+
 
 
 @app.post("/register/albergue")
@@ -471,52 +499,111 @@ def obtener_mascota(
     )
 
 
-
-
-
-# === Rutas adicionales (preguntas y respuestas de ejemplo) ===
-@app.post("/preguntas", response_model=schemas.PreguntaOut)
-def crear_pregunta(pregunta: schemas.PreguntaCreate, db: Session = Depends(get_db)):
-    return crud.create_pregunta(db, pregunta)
-
-@app.get("/preguntas", response_model=list[schemas.PreguntaOut])
-def listar_preguntas(db: Session = Depends(get_db)):
-    return db.query(models.Pregunta).all()
-
-@app.post("/respuestas", response_model=schemas.RespuestaOut)
-def crear_respuesta(respuesta: schemas.RespuestaCreate, db: Session = Depends(get_db)):
-    db_respuesta = models.Respuesta(
-        pregunta_id=respuesta.pregunta_id,
-        valor=respuesta.valor
-    )
-    db.add(db_respuesta)
-    db.commit()
-    db.refresh(db_respuesta)
-    return db_respuesta
-
-@app.get("/respuestas/{pregunta_id}", response_model=list[schemas.RespuestaOut])
-def listar_respuestas_posibles(pregunta_id: int, db: Session = Depends(get_db)):
-    return db.query(models.Respuesta).filter(models.Respuesta.pregunta_id == pregunta_id).all()
-
-@app.post("/respuestas_usuario")
-def guardar_respuestas_usuario(
-    respuestas: list[schemas.RespuestaUsuarioCreate],
-    db: Session = Depends(get_db),
-    user = Depends(get_current_user)
-):
-    adoptante_id = int(user["sub"])
-    for r in respuestas:
-        db_respuesta = models.RespuestaUsuario(
-            adoptante_id=adoptante_id,
-            pregunta_id=r.pregunta_id,
-            respuesta_id=r.respuesta_id,
-        )
-        db.add(db_respuesta)
-    db.commit()
-    return {"message": "Respuestas guardadas"}
-
 @app.get("/matches")
 def obtener_matches_usuario(db: Session = Depends(get_db), user=Depends(get_current_user)):
     from crud import obtener_matches
     ids = obtener_matches(db, int(user["sub"]))
     return [crud.get_user_by_id(db, id_) for id_ in ids]
+
+
+
+from fastapi import APIRouter
+from schemas import MessageIn, MessageOut
+from datetime import datetime
+from models import Mensaje as MensajeModel
+from fastapi import Depends
+from schemas import MessageIn, MessageOut
+
+@app.post("/adoptante/mensajes/enviar", response_model=MessageOut)
+def enviar_mensaje(
+    mensaje: MessageIn,
+    db: Session = Depends(get_db),
+    user_data: dict = Depends(get_current_user)
+):
+    print("Payload del token:", user_data)  # 👈 Esto es clave
+    emisor_id = user_data["sub"]             # 💥 Aquí está el error si no existe
+    emisor_tipo = user_data["rol"]
+
+    nuevo_mensaje = MensajeModel(
+        emisor_id=emisor_id,
+        emisor_tipo=emisor_tipo,
+        receptor_id=mensaje.receptor_id,
+        receptor_tipo=mensaje.receptor_tipo,
+        contenido=mensaje.contenido,
+        timestamp=datetime.utcnow()
+    )
+    db.add(nuevo_mensaje)
+    db.commit()
+    db.refresh(nuevo_mensaje)
+    return nuevo_mensaje
+
+
+
+
+@app.get("/mensajes/conversacion", response_model=List[MessageOut])
+def obtener_conversacion(id1: int, tipo1: str, id2: int, tipo2: str, db: Session = Depends(get_db)):
+    mensajes = db.query(MensajeModel).filter(
+    ((MensajeModel.emisor_id == id1) & (MensajeModel.receptor_id == id2) &
+     (MensajeModel.emisor_tipo == tipo1) & (MensajeModel.receptor_tipo == tipo2))
+    |
+    ((MensajeModel.emisor_id == id2) & (MensajeModel.receptor_id == id1) &
+     (MensajeModel.emisor_tipo == tipo2) & (MensajeModel.receptor_tipo == tipo1))
+    ).order_by(MensajeModel.timestamp).all()
+    return mensajes
+
+
+from fastapi import WebSocket
+
+@app.websocket("/ws/chat/{user_id}")
+async def chat(websocket: WebSocket, user_id: int):
+    await websocket.accept()
+    while True:
+        data = await websocket.receive_text()
+        # Aquí podrías procesar el mensaje, guardarlo y reenviarlo a otros sockets conectados
+        await websocket.send_text(f"Mensaje recibido de {user_id}: {data}")
+
+@app.get("/adoptante/{adoptante_id}", response_model=schemas.AdoptanteOut, summary="Obtener adoptante por ID")
+def get_adoptante_by_id(adoptante_id: int, db: Session = Depends(get_db)):
+    adoptante = db.query(models.Adoptante).filter(models.Adoptante.id == adoptante_id).first()
+    if not adoptante:
+        raise HTTPException(status_code=404, detail="Adoptante no encontrado")
+    return schemas.AdoptanteOut.from_orm_with_etiquetas(adoptante)
+
+@app.get("/albergue/{albergue_id}", response_model=schemas.AlbergueOut, summary="Obtener albergue por ID")
+def get_albergue_by_id(albergue_id: int, db: Session = Depends(get_db)):
+    albergue = db.query(models.Albergue).filter(models.Albergue.id == albergue_id).first()
+    if not albergue:
+        raise HTTPException(status_code=404, detail="Albergue no encontrado")
+    return albergue
+
+from models import Mensaje
+@app.get("/mensajes/contactos")
+def obtener_contactos_conversados(emisor_id: int, emisor_tipo: str, db: Session = Depends(get_db)):
+    mensajes = db.query(Mensaje).filter(
+        (Mensaje.emisor_id == emisor_id) & (Mensaje.emisor_tipo == emisor_tipo) |
+        (Mensaje.receptor_id == emisor_id) & (Mensaje.receptor_tipo == emisor_tipo)
+    ).all()
+
+    contactos = {}
+    for msg in mensajes:
+        if msg.emisor_id == emisor_id and msg.emisor_tipo == emisor_tipo:
+            key = (msg.receptor_id, msg.receptor_tipo)
+        else:
+            key = (msg.emisor_id, msg.emisor_tipo)
+        contactos[key] = True
+
+    resultado = []
+    for (id_contacto, tipo_contacto) in contactos:
+        if tipo_contacto == "adoptante":
+            user = db.query(Adoptante).filter_by(id=id_contacto).first()
+        else:
+            user = db.query(Albergue).filter_by(id=id_contacto).first()
+        if user:
+            resultado.append({
+                "userId": user.id,
+                "userType": tipo_contacto,
+                "name": user.nombre,
+                "avatar": user.avatar_url if hasattr(user, "avatar_url") else "https://i.pravatar.cc/150"
+            })
+
+    return resultado
