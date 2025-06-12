@@ -1,19 +1,18 @@
-from sqlalchemy.orm import Session # type: ignore
-from database import SessionLocal, engine
-from fastapi.security import OAuth2PasswordBearer # type: ignore
-from fastapi.middleware.cors import CORSMiddleware # type: ignore
-from fastapi import FastAPI, Depends, HTTPException, UploadFile, File # type: ignore
-from main import get_current_user
-import modelos_mascotas 
-import schemas_mascotas
-import crud_mascotas
-import json
-import datetime
-import os
-import shutil
-from fastapi.responses import FileResponse # type: ignore
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from sqlalchemy.orm import Session
+from database import SessionLocal
+from fastapi.responses import FileResponse
+from usuario.auth_usuario import get_current_user
 
-app = FastAPI()
+from mascotas import modelos_mascotas, schemas_mascotas, crud_mascotas
+
+import json, os, shutil
+from datetime import datetime
+
+router = APIRouter()
+
+UPLOAD_DIR = "imagenes"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 def get_db():
     db = SessionLocal()
@@ -22,78 +21,74 @@ def get_db():
     finally:
         db.close()
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
-
-origins = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-]
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=origins,        
-    allow_credentials=True,
-    allow_methods=["*"],          
-    allow_headers=["*"],          
-)
-
-@app.get("/mascotas/albergue/{albergue_id}", response_model=list[schemas_mascotas.MascotaResponse])
-def obtener_mascotas_por_albergue(
-    albergue_id: int,
-    db: Session = Depends(get_db),
-    user = Depends(get_current_user),
-):
-    # Solo el albergue dueño puede ver su lista
+@router.get("/mascotas/albergue/{albergue_id}", response_model=list[schemas_mascotas.MascotaResponse])
+def obtener_mascotas_por_albergue(albergue_id: int, db: Session = Depends(get_db), user = Depends(get_current_user)):
     if user["rol"] != "albergue" or int(user["sub"]) != albergue_id:
         raise HTTPException(status_code=403, detail="Acceso denegado.")
-
-    db_mascotas = (
-        db.query(modelos_mascotas.Mascota)
-        .filter(modelos_mascotas.Mascota.albergue_id == albergue_id)
-        .all()
-    )
-
+    
+    db_mascotas = db.query(modelos_mascotas.Mascota).filter(modelos_mascotas.Mascota.albergue_id == albergue_id).all()
     resultado = []
     for m in db_mascotas:
-        lista_etqs = []
-        if m.etiquetas:
-            try:
-                lista_etqs = json.loads(m.etiquetas)
-            except Exception:
-                lista_etqs = []
-
-        lista_vacunas = []
-        if m.vacunas:
-            try:
-                lista_vacunas = json.loads(m.vacunas)
-            except Exception:
-                lista_vacunas = []
-
-        created_at_str = m.created_at.isoformat() if isinstance(m.created_at, datetime) else str(m.created_at)
-
-        resultado.append(
-            schemas_mascotas.MascotaResponse(
-                id=m.id,
-                nombre=m.nombre,
-                edad=m.edad,
-                especie=m.especie,
-                genero=m.genero,
-                descripcion=m.descripcion,
-                albergue_id=m.albergue_id,
-                imagen_id=m.imagen_id,
-                etiquetas=lista_etqs,
-                vacunas=lista_vacunas,
-                created_at=created_at_str,
-            )
-        )
+        resultado.append(schemas_mascotas.MascotaResponse(
+            id=m.id,
+            nombre=m.nombre,
+            edad=m.edad,
+            especie=m.especie,
+            genero=m.genero,
+            descripcion=m.descripcion,
+            albergue_id=m.albergue_id,
+            imagen_id=m.imagen_id,
+            etiquetas=json.loads(m.etiquetas) if m.etiquetas else [],
+            vacunas=json.loads(m.vacunas) if m.vacunas else [],
+            created_at=m.created_at.isoformat() if isinstance(m.created_at, datetime) else str(m.created_at),
+        ))
     return resultado
 
 
-@app.post("/mascotas", response_model=schemas_mascotas.MascotaResponse)
-def crear_mascota(
-    mascota: schemas_mascotas.MascotaCreate,
-    db: Session = Depends(get_db),
-    user = Depends(get_current_user)
-):
+@router.get("/mascotas", response_model=list[schemas_mascotas.MascotaResponse], summary="Listar todas las mascotas")
+def listar_todas_las_mascotas(db: Session = Depends(get_db)):
+    db_mascotas = db.query(modelos_mascotas.Mascota).all()
+    resultado = []
+    for m in db_mascotas:
+        resultado.append(schemas_mascotas.MascotaResponse(
+            id=m.id,
+            nombre=m.nombre,
+            edad=m.edad,
+            especie=m.especie,
+            genero=m.genero,
+            descripcion=m.descripcion,
+            albergue_id=m.albergue_id,
+            imagen_id=m.imagen_id,
+            etiquetas=json.loads(m.etiquetas) if m.etiquetas else [],
+            vacunas=json.loads(m.vacunas) if m.vacunas else [],
+            created_at=m.created_at.isoformat() if isinstance(m.created_at, datetime) else str(m.created_at),
+        ))
+    return resultado
+
+
+@router.get("/mascotas/{mascota_id}", response_model=schemas_mascotas.MascotaResponse)
+def obtener_mascota(mascota_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
+    m = db.query(modelos_mascotas.Mascota).filter(modelos_mascotas.Mascota.id == mascota_id).first()
+    if not m:
+        raise HTTPException(status_code=404, detail="Mascota no encontrada")
+
+    return schemas_mascotas.MascotaResponse(
+        id=m.id,
+        nombre=m.nombre,
+        edad=m.edad,
+        especie=m.especie,
+        genero=m.genero,
+        descripcion=m.descripcion,
+        albergue_id=m.albergue_id,
+        imagen_id=m.imagen_id,
+        etiquetas=json.loads(m.etiquetas) if m.etiquetas else [],
+        vacunas=json.loads(m.vacunas) if m.vacunas else [],
+        created_at=m.created_at.isoformat() if isinstance(m.created_at, datetime) else str(m.created_at),
+    )
+
+
+@router.post("/mascotas", response_model=schemas_mascotas.MascotaResponse)
+def crear_mascota(mascota: schemas_mascotas.MascotaCreate, db: Session = Depends(get_db), user = Depends(get_current_user)):
     if user["rol"] != "albergue":
         raise HTTPException(status_code=403, detail="Solo los albergues pueden registrar mascotas")
 
@@ -104,42 +99,23 @@ def crear_mascota(
 
     nueva = crud_mascotas.create_mascota(db, mascota, albergue_id)
 
-    lista_etqs = []
-    if nueva.etiquetas:
-        try:
-            lista_etqs = json.loads(nueva.etiquetas)
-        except Exception:
-            lista_etqs = []
-
-    lista_vacunas = []
-    if nueva.vacunas:
-        try:
-            lista_vacunas = json.loads(nueva.vacunas)
-        except Exception:
-            lista_vacunas = []
-
     return schemas_mascotas.MascotaResponse(
         id=nueva.id,
         nombre=nueva.nombre,
         edad=nueva.edad,
-        genero=nueva.genero,
         especie=nueva.especie,
+        genero=nueva.genero,
         descripcion=nueva.descripcion,
         albergue_id=nueva.albergue_id,
         imagen_id=nueva.imagen_id,
-        etiquetas=lista_etqs,
-        vacunas=lista_vacunas,
-        created_at=nueva.created_at.isoformat(),
+        etiquetas=json.loads(nueva.etiquetas) if nueva.etiquetas else [],
+        vacunas=json.loads(nueva.vacunas) if nueva.vacunas else [],
+        created_at=nueva.created_at.isoformat()
     )
 
 
-@app.put("/mascotas/{mascota_id}", response_model=schemas_mascotas.MascotaResponse)
-def editar_mascota(
-    mascota_id: int,
-    mascota: schemas_mascotas.MascotaUpdate,
-    db: Session = Depends(get_db),
-    user = Depends(get_current_user)
-):
+@router.put("/mascotas/{mascota_id}", response_model=schemas_mascotas.MascotaResponse)
+def editar_mascota(mascota_id: int, mascota: schemas_mascotas.MascotaUpdate, db: Session = Depends(get_db), user = Depends(get_current_user)):
     if user["rol"] != "albergue":
         raise HTTPException(status_code=403, detail="Solo los albergues pueden editar mascotas")
 
@@ -150,7 +126,6 @@ def editar_mascota(
     if db_mascota.albergue_id != int(user["albergue_id"]):
         raise HTTPException(status_code=403, detail="No tiene permiso para editar esta mascota")
 
-    # Actualizamos campos (si vienen en la solicitud)
     db_mascota.nombre = mascota.nombre if mascota.nombre else db_mascota.nombre
     db_mascota.edad = mascota.edad if mascota.edad else db_mascota.edad
     db_mascota.especie = mascota.especie if mascota.especie else db_mascota.especie
@@ -165,21 +140,18 @@ def editar_mascota(
         id=db_mascota.id,
         nombre=db_mascota.nombre,
         edad=db_mascota.edad,
-        genero=db_mascota.genero,
         especie=db_mascota.especie,
+        genero=db_mascota.genero,
         descripcion=db_mascota.descripcion,
         albergue_id=db_mascota.albergue_id,
         imagen_id=db_mascota.imagen_id,
         etiquetas=json.loads(db_mascota.etiquetas) if db_mascota.etiquetas else [],
-        vacunas=json.loads(db_mascota.vacunas) if db_mascota.vacunas else [],  # 👈 agregado aquí
-        created_at=db_mascota.created_at.isoformat(),
+        vacunas=json.loads(db_mascota.vacunas) if db_mascota.vacunas else [],
+        created_at=db_mascota.created_at.isoformat()
     )
 
 
-UPLOAD_DIR = "imagenes"
-os.makedirs(UPLOAD_DIR, exist_ok=True)
-
-@app.post("/imagenes", response_model=dict)
+@router.post("/imagenes", response_model=dict)
 def subir_imagen(image: UploadFile = File(...), db: Session = Depends(get_db)):
     file_path = os.path.join(UPLOAD_DIR, image.filename)
     with open(file_path, "wb") as buffer:
@@ -192,97 +164,14 @@ def subir_imagen(image: UploadFile = File(...), db: Session = Depends(get_db)):
     return {"id": nueva_imagen.id, "ruta": nueva_imagen.ruta}
 
 
-@app.get("/imagenes/{imagen_id}")
+@router.get("/imagenes/{imagen_id}")
 def obtener_imagen(imagen_id: int, db: Session = Depends(get_db)):
     imagen = db.query(modelos_mascotas.Imagen).filter(modelos_mascotas.Imagen.id == imagen_id).first()
     if not imagen:
         raise HTTPException(status_code=404, detail="Imagen no encontrada")
 
     file_path = imagen.ruta
-
     if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="Archivo de imagen no encontrado")
 
     return FileResponse(file_path)
-
-@app.get(
-    "/mascotas/{mascota_id}",
-    response_model=schemas_mascotas.MascotaResponse,
-    summary="Obtener datos de una mascota por su ID",
-)
-def obtener_mascota(
-    mascota_id: int,
-    db: Session = Depends(get_db),
-    user=Depends(get_current_user),
-):
-    # Opcional: aquí podrías chequear permisos si quieres
-    m = db.query(modelos_mascotas.Mascota).filter(modelos_mascotas.Mascota.id == mascota_id).first()
-    if not m:
-        raise HTTPException(status_code=404, detail="Mascota no encontrada")
-
-    etiquetas = []
-    if m.etiquetas:
-        try:
-            etiquetas = json.loads(m.etiquetas)
-        except:
-            etiquetas = []
-
-    # Convertir created_at a string ISO (si lo usas en frontend)
-    created_at_str = (
-        m.created_at.isoformat()
-        if isinstance(m.created_at, datetime)
-        else str(m.created_at)
-    )
-
-    return schemas_mascotas.MascotaResponse(
-        id=m.id,
-        nombre=m.nombre,
-        edad=m.edad,
-        especie=m.especie,
-        descripcion=m.descripcion,
-        albergue_id=m.albergue_id,
-        imagen_id=m.imagen_id,
-        etiquetas=etiquetas,
-        created_at=created_at_str,  
-    )
-
-
-@app.get("/mascotas", response_model=list[schemas_mascotas.MascotaResponse], summary="Listar todas las mascotas de todos los albergues")
-def listar_todas_las_mascotas(db: Session = Depends(get_db)):
-
-    db_mascotas = db.query(modelos_mascotas.Mascota).all()
-    resultado = []
-    for m in db_mascotas:
-        lista_etqs = []
-        if m.etiquetas:
-            try:
-                lista_etqs = json.loads(m.etiquetas)
-            except Exception:
-                lista_etqs = []
-
-        lista_vacunas = []
-        if m.vacunas:
-            try:
-                lista_vacunas = json.loads(m.vacunas)
-            except Exception:
-                lista_vacunas = []
-
-        created_at_str = m.created_at.isoformat() if isinstance(m.created_at, datetime) else str(m.created_at)
-
-        resultado.append(
-            schemas_mascotas.MascotaResponse(
-                id=m.id,
-                nombre=m.nombre,
-                edad=m.edad,
-                especie=m.especie,
-                genero=m.genero,
-                descripcion=m.descripcion,
-                albergue_id=m.albergue_id,
-                imagen_id=m.imagen_id,
-                etiquetas=lista_etqs,
-                vacunas=lista_vacunas,
-                created_at=created_at_str,
-            )
-        )
-    return resultado
-

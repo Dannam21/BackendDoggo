@@ -1,7 +1,6 @@
 from sqlalchemy.orm import Session # type: ignore
-import modelos_albergue
-import schemas_albergue
-import modelos_albergue
+
+from albergue import modelos_albergue, schemas_albergue, modelos_albergue
 from passlib.hash import bcrypt # type: ignore
 import pytz # type: ignore
 from datetime import datetime 

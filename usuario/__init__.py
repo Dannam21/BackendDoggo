@@ -1,0 +1,1 @@
+from usuario.crud_usuario import get_adoptante_by_correo

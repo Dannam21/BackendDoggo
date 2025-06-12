@@ -3,10 +3,10 @@ from passlib.hash import bcrypt # type: ignore
 import json
 import pytz # type: ignore
 from datetime import datetime 
-import modelos_usuario
-import modelos_match# type: ignore
-import schemas_match# type: ignore
-import schemas_usuario
+
+from usuario import modelos_usuario, schemas_usuario
+from match import modelos_match, schemas_match
+
 # === ADOPTANTE ===
 def create_adoptante(db: Session, adoptante: schemas_usuario.AdoptanteRegister):
     hashed_pw = bcrypt.hash(adoptante.contrasena)

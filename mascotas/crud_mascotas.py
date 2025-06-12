@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session # type: ignore
-import modelos_mascotas
-import schemas_mascotas
+
+from mascotas import modelos_mascotas, schemas_mascotas
 from passlib.hash import bcrypt # type: ignore
 import json
 import pytz # type: ignore
