@@ -6,7 +6,7 @@ from fastapi.security import OAuth2PasswordBearer # type: ignore
 SECRET_KEY = "supersecreto"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")  # solo se usa para extraer el token
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")  
 
 def create_access_token(data: dict):
     to_encode = data.copy()

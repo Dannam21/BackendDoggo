@@ -1,0 +1,191 @@
+import shutil, os, json
+import numpy as np # type: ignore
+from typing import List, Dict, Tuple
+from datetime import datetime
+import crud_mascotas  # type: ignore
+import modelos_mascotas  # type: ignore
+import modelos_usuario  # type: ignore
+import modelos_match  # type: ignore
+import schemas_match # type: ignore
+from sqlalchemy.orm import Session # type: ignore
+from database import SessionLocal, engine
+from fastapi.responses import FileResponse # type: ignore
+from fastapi.security import OAuth2PasswordBearer # type: ignore
+from fastapi.middleware.cors import CORSMiddleware # type: ignore
+from sklearn.preprocessing import MultiLabelBinarizer # type: ignore
+from sklearn.metrics.pairwise import cosine_similarity # type: ignore
+from fastapi import FastAPI, Depends, HTTPException # type: ignore
+from main import get_current_user
+
+app = FastAPI()
+
+origins = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,        
+    allow_credentials=True,
+    allow_methods=["*"],          
+    allow_headers=["*"],          
+)
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+
+def parsear_etiquetas(texto: str) -> List[str]:
+    if not texto:
+        return []
+    try:
+        lista = json.loads(texto)
+        if isinstance(lista, list):
+            return [str(tag).strip() for tag in lista]
+    except Exception:
+        pass
+    return [tag.strip() for tag in texto.split(",") if tag.strip()]
+
+def construir_matriz_tags(
+    adoptante_tags: List[str],
+    mascotas: List[Dict],
+) -> Tuple[MultiLabelBinarizer, np.ndarray, np.ndarray]:
+
+    listado_conjuntos = [adoptante_tags] + [m["tags"] for m in mascotas]
+    mlb = MultiLabelBinarizer()
+    mlb.fit(listado_conjuntos)
+
+    vector_adoptante = mlb.transform([adoptante_tags])[0]         
+    vectores_mascotas = mlb.transform([m["tags"] for m in mascotas])  
+
+    return mlb, vector_adoptante, vectores_mascotas
+
+
+def calcular_similitudes(
+    vector_adoptante: np.ndarray,
+    vectores_mascotas: np.ndarray,
+) -> List[float]:
+    sims = cosine_similarity([vector_adoptante], vectores_mascotas)[0]
+    return [float(s) for s in sims]
+
+from mascotas import MascotaResponse
+@app.get("/usuario/mascotas/{mascota_id}", response_model=MascotaResponse)
+def obtener_mascota_por_id(mascota_id: int, db: Session = Depends(get_db)):
+    mascota = db.query(modelos_mascotas.Mascota).filter(modelos_mascotas.Mascota.id == mascota_id).first()
+    if not mascota:
+        raise HTTPException(status_code=404, detail="Mascota no encontrada")
+
+    # Convertir campos string a lista si es necesario
+    if isinstance(mascota.etiquetas, str):
+        mascota.etiquetas = json.loads(mascota.etiquetas)
+    if isinstance(mascota.vacunas, str):
+        mascota.vacunas = json.loads(mascota.vacunas)
+
+    # Convertir datetime a string ISO
+    mascota.created_at = mascota.created_at.isoformat()
+
+    return mascota
+
+
+@app.get("/recomendaciones/{adoptante_id}")
+def obtener_recomendaciones(
+    adoptante_id: int,
+    top_n: int = 0,
+    db: Session = Depends(get_db),
+):
+    # 1) Buscamos adoptante
+    adoptante = db.query(modelos_usuario.Adoptante).filter(modelos_usuario.Adoptante.id == adoptante_id).first()
+    if not adoptante:
+        raise HTTPException(status_code=404, detail="Adoptante no encontrado")
+
+    # 2) Parseamos tags del adoptante
+    adoptante_tags = parsear_etiquetas(adoptante.etiquetas)
+
+    # 3) Obtenemos todas las mascotas
+    mascotas_db = db.query(modelos_mascotas.Mascota).all()
+    if not mascotas_db:
+        return []  # Si no hay mascotas, devolvemos lista vacía
+
+    # 4) Construimos lista de dicts de mascotas
+    lista_mascotas = []
+    for m in mascotas_db:
+        tags_m = parsear_etiquetas(m.etiquetas)
+        lista_mascotas.append({
+            "id": m.id,
+            "nombre": m.nombre,
+            "especie": m.especie,
+            "edad": m.edad,
+            "descripcion": m.descripcion,
+            "albergue_id": m.albergue_id,
+            "imagen_id": m.imagen_id,
+            "tags": tags_m,
+        })
+
+    # 5) Vectorizamos y calculamos similitudes
+    _, vector_adopt, vectores_m = construir_matriz_tags(adoptante_tags, lista_mascotas)
+    sims = calcular_similitudes(vector_adopt, vectores_m)
+
+    # 6) Adjuntamos la similitud a cada dict de mascota, ordenamos y recortamos si hace falta
+    for idx, mascota in enumerate(lista_mascotas):
+        mascota["similitud"] = round(sims[idx], 4)
+
+    lista_mascotas.sort(key=lambda x: x["similitud"], reverse=True)
+
+    if top_n and top_n > 0:
+        lista_mascotas = lista_mascotas[:top_n]
+
+    # 7) Devolvemos la lista como JSON
+    return lista_mascotas
+
+
+# === Rutas adicionales (preguntas y respuestas de ejemplo) ===
+@app.post("/preguntas", response_model=schemas_match.PreguntaOut)
+def crear_pregunta(pregunta: schemas_match.PreguntaCreate, db: Session = Depends(get_db)):
+    return crud_mascotas.create_pregunta(db, pregunta)
+
+@app.get("/preguntas", response_model=list[schemas_match.PreguntaOut])
+def listar_preguntas(db: Session = Depends(get_db)):
+    return db.query(modelos_match.Pregunta).all()
+
+@app.post("/respuestas", response_model=schemas_match.RespuestaOut)
+def crear_respuesta(respuesta: schemas_match.RespuestaCreate, db: Session = Depends(get_db)):
+    db_respuesta = modelos_match.Respuesta(
+        pregunta_id=respuesta.pregunta_id,
+        valor=respuesta.valor
+    )
+    db.add(db_respuesta)
+    db.commit()
+    db.refresh(db_respuesta)
+    return db_respuesta
+
+@app.get("/respuestas/{pregunta_id}", response_model=list[schemas_match.RespuestaOut])
+def listar_respuestas_posibles(pregunta_id: int, db: Session = Depends(get_db)):
+    return db.query(modelos_match.Respuesta).filter(modelos_match.Respuesta.pregunta_id == pregunta_id).all()
+
+@app.post("/respuestas_usuario")
+def guardar_respuestas_usuario(
+    respuestas: list[schemas_match.RespuestaUsuarioCreate],
+    db: Session = Depends(get_db),
+    user = Depends(get_current_user)
+):
+    adoptante_id = int(user["sub"])
+    for r in respuestas:
+        db_respuesta = modelos_match.RespuestaUsuario(
+            adoptante_id=adoptante_id,
+            pregunta_id=r.pregunta_id,
+            respuesta_id=r.respuesta_id,
+        )
+        db.add(db_respuesta)
+    db.commit()
+    return {"message": "Respuestas guardadas"}
+
+@app.get("/matches")
+def obtener_matches_usuario(db: Session = Depends(get_db), user=Depends(get_current_user)):
+    from mascotas.crud_mascotas import obtener_matches
+    ids = obtener_matches(db, int(user["sub"]))
+    return [crud_mascotas.get_user_by_id(db, id_) for id_ in ids]
