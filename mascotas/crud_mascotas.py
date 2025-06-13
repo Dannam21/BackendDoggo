@@ -21,6 +21,8 @@ def create_mascota(db: Session, mascota: schemas_mascotas.MascotaCreate, albergu
         etiquetas=json.dumps(mascota.etiquetas),
         albergue_id=albergue_id,
         created_at=ahora_lima, 
+        genero=mascota.genero, 
+        vacunas=json.dumps(mascota.vacunas),
     )
     db.add(nueva)
     db.commit()

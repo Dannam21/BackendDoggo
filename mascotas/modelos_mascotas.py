@@ -17,7 +17,6 @@ class Mascota(Base):
     vacunas = Column(Text, nullable=True)  # NUEVO CAMPO
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     genero = Column(String, nullable=False)
-
     imagen = relationship("Imagen")
     albergue = relationship("Albergue", back_populates="mascotas")
 

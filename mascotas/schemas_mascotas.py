@@ -1,7 +1,16 @@
 from pydantic import BaseModel # type: ignore
 from typing import Optional, List
+from enum import Enum
+from pydantic import BaseModel
+from typing import List, Optional
+
 
 #=====MASCOTA=======
+class GeneroEnum(str, Enum):
+    macho = "Macho"
+    hembra = "Hembra"
+
+
 class MascotaCreate(BaseModel):
     nombre: str
     edad: int
@@ -9,8 +18,8 @@ class MascotaCreate(BaseModel):
     descripcion: Optional[str]
     imagen_id: int
     etiquetas: List[str]
-    genero: str
-    vacunas: List[str] = []  # NUEVO CAMPO
+    genero: GeneroEnum 
+    vacunas: List[str] = []  
 
 
 class MascotaResponse(BaseModel):
@@ -25,7 +34,7 @@ class MascotaResponse(BaseModel):
     etiquetas: List[str]
     vacunas: List[str]
     created_at: str
-    genero: Optional[str]
+    genero: Optional[GeneroEnum] = None
 
     class Config:
         from_attributes = True

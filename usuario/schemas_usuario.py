@@ -12,12 +12,6 @@ class AdoptanteRegister(BaseModel):
     etiquetas: List[str] = []
 
 
-class AlbergueRegister(BaseModel):
-    nombre: str
-    ruc: str
-    correo: str
-    contrasena: str
-    telefono: Optional[str] = None
 
 # === LOGIN ===
 class AdoptanteLogin(BaseModel):
