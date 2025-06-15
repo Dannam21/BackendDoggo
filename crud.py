@@ -1,11 +1,12 @@
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session # type: ignore
 import models
 import schemas
-from passlib.hash import bcrypt
+from passlib.hash import bcrypt # type: ignore
 import json
-import pytz
-from datetime import datetime
+import pytz # type: ignore
+from datetime import datetime 
 from models import Mascota
+
 # === ADOPTANTE ===
 def create_adoptante(db: Session, adoptante: schemas.AdoptanteRegister):
     hashed_pw = bcrypt.hash(adoptante.contrasena)
@@ -17,7 +18,8 @@ def create_adoptante(db: Session, adoptante: schemas.AdoptanteRegister):
         correo=adoptante.correo,
         telefono=getattr(adoptante, "telefono", None),  # si agregaste teléfono
         contrasena=hashed_pw,
-        etiquetas=json.dumps(adoptante.etiquetas or [])  # convertimos lista a JSON string
+        etiquetas=json.dumps(adoptante.etiquetas or []),  # convertimos lista a JSON string
+        imagen_perfil_id=adoptante.imagen_perfil_id    
     )
     db.add(db_adoptante)
     db.commit()
@@ -91,16 +93,6 @@ def get_mascotas_por_albergue(db: Session, albergue_id: int):
 
 
 
-# === PREGUNTAS ===
-from sklearn.neighbors import NearestNeighbors
-import numpy as np
-
-def create_pregunta(db: Session, pregunta: schemas.PreguntaCreate):
-    db_pregunta = models.Pregunta(texto=pregunta.texto)
-    db.add(db_pregunta)
-    db.commit()
-    db.refresh(db_pregunta)
-    return db_pregunta
 
 
 # == Match == 

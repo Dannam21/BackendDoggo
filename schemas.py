@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel # type: ignore
 from typing import Optional, List
 import json
 
@@ -10,6 +10,8 @@ class AdoptanteRegister(BaseModel):
     correo: str
     contrasena: str
     etiquetas: List[str] = []
+    imagen_perfil_id: int
+
 
 
 class AlbergueRegister(BaseModel):
@@ -37,6 +39,7 @@ class AdoptanteOut(BaseModel):
     correo: str
     telefono: Optional[str]
     etiquetas: List[str]
+    imagen_perfil_id: int
 
     class Config:
         from_attributes = True
@@ -58,8 +61,17 @@ class AdoptanteOut(BaseModel):
             correo=adoptante_obj.correo,
             telefono=adoptante_obj.telefono,
             etiquetas=lista,
+            imagen_perfil_id=adoptante_obj.imagen_perfil_id,
         )
 
+class AdoptanteCreate(BaseModel):
+    nombre: str
+    apellido: str
+    dni: str
+    correo: str
+    contrasena: str
+    telefono: Optional[str] = None
+    imagen_perfil_id: int
 
 #=====MASCOTA=======
 class MascotaCreate(BaseModel):
@@ -82,7 +94,7 @@ class MascotaResponse(BaseModel):
     albergue_id: int
     imagen_id: int
     etiquetas: List[str]
-    vacunas: List[str] = []  # NUEVO CAMPO
+    vacunas: List[str]
     created_at: str
     genero: Optional[str]
 
@@ -99,7 +111,6 @@ class MascotaUpdate(BaseModel):
     vacunas: List[str] = []  # NUEVO CAMPO
 
 
-
 # === OUTPUT DEL ALBERGUE ===
 class AlbergueOut(BaseModel):
     id: int
@@ -110,18 +121,6 @@ class AlbergueOut(BaseModel):
     class Config:
         from_attributes = True
 
-
-
-# === CREACIÓN INTERNA (CRUD) ===
-class AdoptanteCreate(BaseModel):
-    nombre: str
-    apellido: str
-    dni: str
-    correo: str
-    contrasena: str
-    telefono: Optional[str] = None
-    # las etiquetas vendrán por separado al momento de finalizar el cuestionario
-
 class AlbergueCreate(BaseModel):
     nombre: str
     ruc: str
@@ -130,41 +129,40 @@ class AlbergueCreate(BaseModel):
     telefono: Optional[str] = None
 
 
+from pydantic import BaseModel
+from typing import Literal, Union
+from datetime import datetime
 
-# === PREGUNTAS Y RESPUESTAS ===
-class PreguntaCreate(BaseModel):
-    texto: str
+class Message(BaseModel):
+    emisor_id: int
+    emisor_tipo: Literal["adoptante", "albergue"]
+    receptor_id: int
+    receptor_tipo: Literal["adoptante", "albergue"]
+    contenido: str
+    timestamp: datetime
 
-class PreguntaOut(BaseModel):
-    id: int
-    texto: str
+from pydantic import BaseModel
+from typing import Literal, Optional
+from datetime import datetime
+
+# Modelo para recibir el mensaje sin timestamp (input)
+class MessageIn(BaseModel):
+    receptor_id: int
+    receptor_tipo: str
+    contenido: str
+
+# schemas.py
+
+from pydantic import BaseModel
+from datetime import datetime
+
+class MessageOut(BaseModel):
+    emisor_id: int
+    emisor_tipo: str
+    receptor_id: int
+    receptor_tipo: str
+    contenido: str
+    timestamp: datetime
 
     class Config:
-        from_attributes = True
-
-class RespuestaCreate(BaseModel):
-    pregunta_id: int
-    valor: str
-
-class RespuestaOut(BaseModel):
-    id: int
-    pregunta_id: int
-    valor: str
-
-    class Config:
-        from_attributes = True
-
-class RespuestaUsuarioCreate(BaseModel):
-    adoptante_id: Optional[int] = None
-    pregunta_id: int
-    respuesta_id: Optional[int] = None
-
-class RespuestaUsuarioOut(BaseModel):
-    id: int
-    adoptante_id: int
-    pregunta_id: int
-    respuesta_id: Optional[int]
-
-    class Config:
-        from_attributes = True
-
+        orm_mode = True
