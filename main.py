@@ -118,7 +118,12 @@ def login_adoptante(user: schemas.AdoptanteLogin, db: Session = Depends(get_db))
 
     token_data = {"sub": str(adopt.id), "rol": "adoptante"}
     token = auth.create_access_token(token_data)
-    return {"access_token": token, "token_type": "bearer"}
+
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "id": adopt.id,
+    }
 
 
 @app.post("/login/albergue")
