@@ -131,3 +131,41 @@ def obtener_matches(db: Session, usuario_actual_id: int, k=3):
 
     return vecinos_ids
 
+
+
+from sqlalchemy.orm import Session
+from models import Calendario, CitaVisita, CitaEvento
+import schemas
+
+
+def crear_cita_visita(db: Session, data: schemas.CitaVisitaCreate):
+    data_dict = data.calendario.dict()
+    data_dict["tipo"] = "visita"
+    data_dict["adoptante_id"] = data.adoptante_id  # ✅ agrega esto
+
+    cita = Calendario(**data_dict)
+    db.add(cita)
+    db.flush()
+
+    visita = CitaVisita(id=cita.id, adoptante_id=data.adoptante_id)
+    db.add(visita)
+    db.commit()
+    db.refresh(cita)
+    return cita
+
+
+
+def crear_cita_evento(db: Session, data: schemas.CitaEventoCreate):
+    cita = Calendario(**data.calendario.dict(), tipo="evento")
+    db.add(cita)
+    db.flush()
+
+    evento = CitaEvento(id=cita.id)
+    db.add(evento)
+    db.commit()
+    db.refresh(cita)
+    return cita
+
+
+def obtener_citas_por_albergue(db: Session, albergue_id: int):
+    return db.query(Calendario).filter(Calendario.albergue_id == albergue_id).all()
