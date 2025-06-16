@@ -15,6 +15,7 @@ from models import Adoptante, Albergue, Mascota, Imagen
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 router = APIRouter()
+from auth import create_access_token
 
 models.Base.metadata.create_all(bind=engine)
 
@@ -63,12 +64,24 @@ def register_adoptante(user: schemas.AdoptanteRegister, db: Session = Depends(ge
     
     # Verificar que la imagen existe si se proporciona
     if user.imagen_perfil_id:
-        imagen = db.query(models.Imagen).filter(models.Imagen.id == user.imagen_perfil_id).first()
+        imagen = db.query(models.ImagenPerfil).filter(models.ImagenPerfil.id == user.imagen_perfil_id).first()
         if not imagen:
             raise HTTPException(status_code=400, detail="Imagen no encontrada")
 
     new_adoptante = crud.create_adoptante(db, user)
-    return {"mensaje": "Adoptante registrado con éxito", "id": new_adoptante.id}
+
+    # Generar token JWT
+    token_data = {
+        "sub": str(new_adoptante.id),
+        "rol": "adoptante"
+    }
+    access_token = create_access_token(token_data)
+
+    return {
+        "mensaje": "Adoptante registrado con éxito",
+        "id": new_adoptante.id,
+        "token": access_token
+    }
 
 
 UPLOAD_DIR_PERFILES2 = "imagenes_perfil"

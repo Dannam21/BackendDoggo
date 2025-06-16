@@ -10,7 +10,7 @@ class AdoptanteRegister(BaseModel):
     correo: str
     contrasena: str
     etiquetas: List[str] = []
-    imagen_perfil_id: Optional[int] = None
+    imagen_perfil_id: int
 
 
 
@@ -39,7 +39,7 @@ class AdoptanteOut(BaseModel):
     correo: str
     telefono: Optional[str]
     etiquetas: List[str]
-    imagen_perfil_id: Optional[int] = None
+    imagen_perfil_id: int
 
     class Config:
         from_attributes = True
@@ -71,7 +71,7 @@ class AdoptanteCreate(BaseModel):
     correo: str
     contrasena: str
     telefono: Optional[str] = None
-    imagen_perfil_id: Optional[int] = None
+    imagen_perfil_id: int
 
 #=====MASCOTA=======
 class MascotaCreate(BaseModel):
