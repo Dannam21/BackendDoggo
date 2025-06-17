@@ -5,6 +5,7 @@ from passlib.hash import bcrypt # type: ignore
 import json
 import pytz # type: ignore
 from datetime import datetime 
+from models import Mascota
 
 # === ADOPTANTE ===
 def create_adoptante(db: Session, adoptante: schemas.AdoptanteRegister):
@@ -67,9 +68,11 @@ def create_mascota(db: Session, mascota: schemas.MascotaCreate, albergue_id: int
         nombre=mascota.nombre,
         edad=mascota.edad,
         especie=mascota.especie,
+        genero=mascota.genero,  
         descripcion=mascota.descripcion,
         imagen_id=mascota.imagen_id,
         etiquetas=json.dumps(mascota.etiquetas),
+        vacunas=json.dumps(mascota.vacunas),  # 👈 Agregado aquí
         albergue_id=albergue_id,
         created_at=ahora_lima, 
     )
@@ -80,20 +83,12 @@ def create_mascota(db: Session, mascota: schemas.MascotaCreate, albergue_id: int
 
 
 
+
 def get_all_mascotas(db: Session):
     return db.query(models.Mascota).all()
 
 def get_mascotas_por_albergue(db: Session, albergue_id: int):
     return db.query(models.Mascota).filter(models.Mascota.albergue_id == albergue_id).all()
-
-
-
-
-
-
-
-
-
 
 
 
@@ -144,3 +139,4 @@ def obtener_matches(db: Session, usuario_actual_id: int, k=3):
     vecinos_ids = [ids[i] for i in indices[0] if ids[i] != usuario_actual_id]
 
     return vecinos_ids
+
