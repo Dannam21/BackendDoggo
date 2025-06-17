@@ -1,6 +1,6 @@
 import shutil, os, json
 import numpy as np # type: ignore
-from typing import List, Dict, Tuple
+from typing import List, Dict, Any, Tuple
 from datetime import datetime
 import models, schemas, crud, auth
 from sqlalchemy.orm import Session # type: ignore
@@ -10,21 +10,22 @@ from fastapi.security import OAuth2PasswordBearer # type: ignore
 from fastapi.middleware.cors import CORSMiddleware # type: ignore
 from sklearn.preprocessing import MultiLabelBinarizer # type: ignore
 from sklearn.metrics.pairwise import cosine_similarity # type: ignore
-from fastapi import FastAPI, Depends, HTTPException, UploadFile, File # type: ignore
+from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, APIRouter, WebSocket # type: ignore
 from models import Adoptante, Albergue, Mascota, Imagen
-from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-router = APIRouter()
+from schemas import MessageIn, MessageOut, MascotaResponse
+from datetime import datetime
+from models import Mensaje as MensajeModel
 from auth import create_access_token
 
+router = APIRouter()
 models.Base.metadata.create_all(bind=engine)
-
 app = FastAPI()
-
 origins = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
 ]
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,        
@@ -32,7 +33,6 @@ app.add_middleware(
     allow_methods=["*"],          
     allow_headers=["*"],          
 )
-
 
 def get_db():
     db = SessionLocal()
@@ -49,20 +49,25 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
         raise HTTPException(status_code=401, detail="Token inválido")
     return payload
 
+# ------------------------------------------------
+# Sección: Root
+# ------------------------------------------------
 
-@app.get("/")
+@app.get("/",tags=["Root"])
 def root():
     return {"message": "Bienvenido a la API de Doggo"}
 
+# ------------------------------------------------
+# Sección: Adoptante
+# ------------------------------------------------
 
-@app.post("/register/adoptante")
+@app.post("/register/adoptante", tags=["Adoptante"])
 def register_adoptante(user: schemas.AdoptanteRegister, db: Session = Depends(get_db)):
     if crud.get_adoptante_by_correo(db, user.correo):
         raise HTTPException(status_code=400, detail="El correo ya está registrado")
     if db.query(models.Adoptante).filter(models.Adoptante.dni == user.dni).first():
         raise HTTPException(status_code=400, detail="El DNI ya está registrado")
     
-    # Verificar que la imagen existe si se proporciona
     if user.imagen_perfil_id:
         imagen = db.query(models.ImagenPerfil).filter(models.ImagenPerfil.id == user.imagen_perfil_id).first()
         if not imagen:
@@ -70,7 +75,6 @@ def register_adoptante(user: schemas.AdoptanteRegister, db: Session = Depends(ge
 
     new_adoptante = crud.create_adoptante(db, user)
 
-    # Generar token JWT
     token_data = {
         "sub": str(new_adoptante.id),
         "rol": "adoptante"
@@ -83,47 +87,7 @@ def register_adoptante(user: schemas.AdoptanteRegister, db: Session = Depends(ge
         "token": access_token
     }
 
-
-UPLOAD_DIR_PERFILES2 = "imagenes_perfil"
-os.makedirs(UPLOAD_DIR_PERFILES2, exist_ok=True)
-
-@app.post("/imagenesProfile", response_model=dict)
-def subir_imagen_profile(image: UploadFile = File(...), db: Session = Depends(get_db)):
-    file_path = os.path.join(UPLOAD_DIR_PERFILES2, image.filename)
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(image.file, buffer)
-
-    nueva_imagen = models.ImagenPerfil(ruta=file_path)
-    db.add(nueva_imagen)
-    db.commit()
-    db.refresh(nueva_imagen)
-    return {"id": nueva_imagen.id, "ruta": nueva_imagen.ruta}
-
-@app.get("/imagenesProfile/{imagen_id}")
-def obtener_imagen(imagen_id: int, db: Session = Depends(get_db)):
-    imagen = db.query(models.ImagenPerfil).filter(models.ImagenPerfil.id == imagen_id).first()
-    if not imagen:
-        raise HTTPException(status_code=404, detail="Imagen no encontrada")
-
-    file_path = imagen.ruta
-
-    if not os.path.exists(file_path):
-        raise HTTPException(status_code=404, detail="Archivo de imagen no encontrado")
-
-    return FileResponse(file_path)
-
-
-
-@app.post("/register/albergue")
-def register_albergue(user: schemas.AlbergueCreate, db: Session = Depends(get_db)):
-    if crud.get_albergue_by_correo(db, user.correo):
-        raise HTTPException(status_code=400, detail="El correo ya está registrado")
-
-    new_albergue = crud.create_albergue(db, user)
-    return {"mensaje": "Albergue registrado con éxito", "id": new_albergue.id}
-
-
-@app.post("/login/adoptante")
+@app.post("/login/adoptante", tags=["Adoptante"])
 def login_adoptante(user: schemas.AdoptanteLogin, db: Session = Depends(get_db)):
     adopt = db.query(models.Adoptante).filter(models.Adoptante.correo == user.correo).first()
     if not adopt or not crud.verify_password(user.contrasena, adopt.contrasena):
@@ -138,8 +102,41 @@ def login_adoptante(user: schemas.AdoptanteLogin, db: Session = Depends(get_db))
         "id": adopt.id,
     }
 
+@app.get("/adoptante/me", response_model=schemas.AdoptanteOut, summary="Obtener datos del adoptante autenticado", tags=["Adoptante"])
+def get_adoptante_me(user=Depends(get_current_user), db: Session = Depends(get_db)):
+    adoptante_id = int(user["sub"])
+    adoptante_obj = db.query(models.Adoptante).filter(models.Adoptante.id == adoptante_id).first()
+    if not adoptante_obj:
+        raise HTTPException(status_code=404, detail="Adoptante no encontrado")
+    return schemas.AdoptanteOut.from_orm_with_etiquetas(adoptante_obj)
 
-@app.post("/login/albergue")
+@app.get("/adoptante/{adoptante_id}", response_model=schemas.AdoptanteOut, summary="Obtener adoptante por ID", tags=["Adoptante"])
+def get_adoptante_by_id(adoptante_id: int, db: Session = Depends(get_db)):
+    adoptante = (
+        db.query(models.Adoptante)
+        .options(joinedload(models.Adoptante.imagen_perfil))  # Asegura que imagen_perfil esté cargado
+        .filter(models.Adoptante.id == adoptante_id)
+        .first()
+    )
+    
+    if not adoptante:
+        raise HTTPException(status_code=404, detail="Adoptante no encontrado")
+    
+    return schemas.AdoptanteOut.from_orm_with_etiquetas(adoptante)
+
+# ------------------------------------------------
+# Sección: Albergue
+# ------------------------------------------------
+
+@app.post("/register/albergue", tags=["Albergue"])
+def register_albergue(user: schemas.AlbergueCreate, db: Session = Depends(get_db)):
+    if crud.get_albergue_by_correo(db, user.correo):
+        raise HTTPException(status_code=400, detail="El correo ya está registrado")
+
+    new_albergue = crud.create_albergue(db, user)
+    return {"mensaje": "Albergue registrado con éxito", "id": new_albergue.id}
+
+@app.post("/login/albergue", tags=["Albergue"])
 def login_albergue(user: schemas.AlbergueLogin, db: Session = Depends(get_db)):
     db_albergue = crud.get_albergue_by_correo(db, user.correo)
     if not db_albergue or not crud.verify_password(user.contrasena, db_albergue.contrasena):
@@ -153,17 +150,23 @@ def login_albergue(user: schemas.AlbergueLogin, db: Session = Depends(get_db)):
     token = auth.create_access_token(token_data)
     return {"access_token": token, "token_type": "bearer", "albergue_id": db_albergue.id}
 
+@app.get("/albergue/me", response_model=schemas.AlbergueOut, summary="Obtener datos del albergue autenticado", tags=["Albergue"])
+def get_albergue_me(user=Depends(get_current_user), db: Session = Depends(get_db)):
+    if user.get("rol") != "albergue":
+        raise HTTPException(status_code=403, detail="Solo los albergues pueden acceder a este recurso")
 
-@app.get("/adoptante/me", response_model=schemas.AdoptanteOut, summary="Obtener datos del adoptante autenticado")
-def get_adoptante_me(user=Depends(get_current_user), db: Session = Depends(get_db)):
-    adoptante_id = int(user["sub"])
-    adoptante_obj = db.query(models.Adoptante).filter(models.Adoptante.id == adoptante_id).first()
-    if not adoptante_obj:
-        raise HTTPException(status_code=404, detail="Adoptante no encontrado")
-    return schemas.AdoptanteOut.from_orm_with_etiquetas(adoptante_obj)
+    albergue_id = int(user["albergue_id"])
+    albergue_obj = db.query(models.Albergue).filter(models.Albergue.id == albergue_id).first()
+    if not albergue_obj:
+        raise HTTPException(status_code=404, detail="Albergue no encontrado")
 
+    return schemas.AlbergueOut.from_orm(albergue_obj)
 
-@app.get("/mascotas/albergue/{albergue_id}", response_model=list[schemas.MascotaResponse])
+# ------------------------------------------------
+# Sección: Mascotas
+# ------------------------------------------------
+
+@app.get("/mascotas/albergue/{albergue_id}", response_model=list[schemas.MascotaResponse], tags=["Mascotas"])
 def obtener_mascotas_por_albergue(
     albergue_id: int,
     db: Session = Depends(get_db),
@@ -214,8 +217,7 @@ def obtener_mascotas_por_albergue(
         )
     return resultado
 
-
-@app.post("/mascotas", response_model=schemas.MascotaResponse)
+@app.post("/mascotas", response_model=schemas.MascotaResponse, tags=["Mascotas"])
 def crear_mascota(
     mascota: schemas.MascotaCreate,
     db: Session = Depends(get_db),
@@ -259,8 +261,7 @@ def crear_mascota(
         created_at=nueva.created_at.isoformat(),
     )
 
-
-@app.put("/mascotas/{mascota_id}", response_model=schemas.MascotaResponse)
+@app.put("/mascotas/{mascota_id}", response_model=schemas.MascotaResponse, tags=["Mascotas"])
 def editar_mascota(
     mascota_id: int,
     mascota: schemas.MascotaUpdate,
@@ -302,50 +303,7 @@ def editar_mascota(
         created_at=db_mascota.created_at.isoformat(),
     )
 
-
-UPLOAD_DIR = "imagenes"
-os.makedirs(UPLOAD_DIR, exist_ok=True)
-
-@app.post("/imagenes", response_model=dict)
-def subir_imagen(image: UploadFile = File(...), db: Session = Depends(get_db)):
-    file_path = os.path.join(UPLOAD_DIR, image.filename)
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(image.file, buffer)
-
-    nueva_imagen = models.Imagen(ruta=file_path)
-    db.add(nueva_imagen)
-    db.commit()
-    db.refresh(nueva_imagen)
-    return {"id": nueva_imagen.id, "ruta": nueva_imagen.ruta}
-
-
-@app.get("/imagenes/{imagen_id}")
-def obtener_imagen(imagen_id: int, db: Session = Depends(get_db)):
-    imagen = db.query(models.Imagen).filter(models.Imagen.id == imagen_id).first()
-    if not imagen:
-        raise HTTPException(status_code=404, detail="Imagen no encontrada")
-
-    file_path = imagen.ruta
-
-    if not os.path.exists(file_path):
-        raise HTTPException(status_code=404, detail="Archivo de imagen no encontrado")
-
-    return FileResponse(file_path)
-
-
-@app.get("/albergue/me", response_model=schemas.AlbergueOut, summary="Obtener datos del albergue autenticado")
-def get_albergue_me(user=Depends(get_current_user), db: Session = Depends(get_db)):
-    if user.get("rol") != "albergue":
-        raise HTTPException(status_code=403, detail="Solo los albergues pueden acceder a este recurso")
-
-    albergue_id = int(user["albergue_id"])
-    albergue_obj = db.query(models.Albergue).filter(models.Albergue.id == albergue_id).first()
-    if not albergue_obj:
-        raise HTTPException(status_code=404, detail="Albergue no encontrado")
-
-    return schemas.AlbergueOut.from_orm(albergue_obj)
-
-@app.get("/mascotas", response_model=list[schemas.MascotaResponse], summary="Listar todas las mascotas de todos los albergues")
+@app.get("/mascotas", response_model=list[schemas.MascotaResponse], summary="Listar todas las mascotas de todos los albergues", tags=["Mascotas"])
 def listar_todas_las_mascotas(db: Session = Depends(get_db)):
 
     db_mascotas = db.query(models.Mascota).all()
@@ -384,114 +342,7 @@ def listar_todas_las_mascotas(db: Session = Depends(get_db)):
         )
     return resultado
 
-
-def parsear_etiquetas(texto: str) -> List[str]:
-    if not texto:
-        return []
-    try:
-        lista = json.loads(texto)
-        if isinstance(lista, list):
-            return [str(tag).strip() for tag in lista]
-    except Exception:
-        pass
-    return [tag.strip() for tag in texto.split(",") if tag.strip()]
-
-def construir_matriz_tags(
-    adoptante_tags: List[str],
-    mascotas: List[Dict],
-) -> Tuple[MultiLabelBinarizer, np.ndarray, np.ndarray]:
-
-    listado_conjuntos = [adoptante_tags] + [m["tags"] for m in mascotas]
-    mlb = MultiLabelBinarizer()
-    mlb.fit(listado_conjuntos)
-
-    vector_adoptante = mlb.transform([adoptante_tags])[0]         
-    vectores_mascotas = mlb.transform([m["tags"] for m in mascotas])  
-
-    return mlb, vector_adoptante, vectores_mascotas
-
-
-def calcular_similitudes(
-    vector_adoptante: np.ndarray,
-    vectores_mascotas: np.ndarray,
-) -> List[float]:
-    sims = cosine_similarity([vector_adoptante], vectores_mascotas)[0]
-    return [float(s) for s in sims]
-
-from schemas import MascotaResponse
-@app.get("/usuario/mascotas/{mascota_id}", response_model=MascotaResponse)
-def obtener_mascota_por_id(mascota_id: int, db: Session = Depends(get_db)):
-    mascota = db.query(models.Mascota).filter(models.Mascota.id == mascota_id).first()
-    if not mascota:
-        raise HTTPException(status_code=404, detail="Mascota no encontrada")
-
-    # Convertir campos string a lista si es necesario
-    if isinstance(mascota.etiquetas, str):
-        mascota.etiquetas = json.loads(mascota.etiquetas)
-    if isinstance(mascota.vacunas, str):
-        mascota.vacunas = json.loads(mascota.vacunas)
-
-    # Convertir datetime a string ISO
-    mascota.created_at = mascota.created_at.isoformat()
-
-    return mascota
-
-
-@app.get("/recomendaciones/{adoptante_id}")
-def obtener_recomendaciones(
-    adoptante_id: int,
-    top_n: int = 0,
-    db: Session = Depends(get_db),
-):
-    # 1) Buscamos adoptante
-    adoptante = db.query(models.Adoptante).filter(models.Adoptante.id == adoptante_id).first()
-    if not adoptante:
-        raise HTTPException(status_code=404, detail="Adoptante no encontrado")
-
-    # 2) Parseamos tags del adoptante
-    adoptante_tags = parsear_etiquetas(adoptante.etiquetas)
-
-    # 3) Obtenemos todas las mascotas
-    mascotas_db = db.query(models.Mascota).all()
-    if not mascotas_db:
-        return []  # Si no hay mascotas, devolvemos lista vacía
-
-    # 4) Construimos lista de dicts de mascotas
-    lista_mascotas = []
-    for m in mascotas_db:
-        tags_m = parsear_etiquetas(m.etiquetas)
-        lista_mascotas.append({
-            "id": m.id,
-            "nombre": m.nombre,
-            "especie": m.especie,
-            "edad": m.edad,
-            "descripcion": m.descripcion,
-            "albergue_id": m.albergue_id,
-            "imagen_id": m.imagen_id,
-            "tags": tags_m,
-        })
-
-    # 5) Vectorizamos y calculamos similitudes
-    _, vector_adopt, vectores_m = construir_matriz_tags(adoptante_tags, lista_mascotas)
-    sims = calcular_similitudes(vector_adopt, vectores_m)
-
-    # 6) Adjuntamos la similitud a cada dict de mascota, ordenamos y recortamos si hace falta
-    for idx, mascota in enumerate(lista_mascotas):
-        mascota["similitud"] = round(sims[idx], 4)
-
-    lista_mascotas.sort(key=lambda x: x["similitud"], reverse=True)
-
-    if top_n and top_n > 0:
-        lista_mascotas = lista_mascotas[:top_n]
-
-    # 7) Devolvemos la lista como JSON
-    return lista_mascotas
-
-@app.get(
-    "/mascotas/{mascota_id}",
-    response_model=schemas.MascotaResponse,
-    summary="Obtener datos de una mascota por su ID",
-)
+@app.get("/mascotas/{mascota_id}",response_model=schemas.MascotaResponse,summary="Obtener datos de una mascota por su ID", tags=["Mascotas"])
 def obtener_mascota(
     mascota_id: int,
     db: Session = Depends(get_db),
@@ -528,23 +379,165 @@ def obtener_mascota(
         created_at=created_at_str,  
     )
 
+# ------------------------------------------------
+# Sección: Imágenes
+# ------------------------------------------------
 
-@app.get("/matches")
+UPLOAD_DIR = "imagenes"
+UPLOAD_DIR_PERFILES2 = "imagenes_perfil"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+os.makedirs(UPLOAD_DIR_PERFILES2, exist_ok=True)
+
+@app.post("/imagenesProfile", response_model=dict, tags=["Imágenes"])
+def subir_imagen_profile(image: UploadFile = File(...), db: Session = Depends(get_db)):
+    file_path = os.path.join(UPLOAD_DIR_PERFILES2, image.filename)
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(image.file, buffer)
+
+    nueva_imagen = models.ImagenPerfil(ruta=file_path)
+    db.add(nueva_imagen)
+    db.commit()
+    db.refresh(nueva_imagen)
+    return {"id": nueva_imagen.id, "ruta": nueva_imagen.ruta}
+
+@app.get("/imagenesProfile/{imagen_id}", tags=["Imágenes"])
+def obtener_imagen(imagen_id: int, db: Session = Depends(get_db)):
+    imagen = db.query(models.ImagenPerfil).filter(models.ImagenPerfil.id == imagen_id).first()
+    if not imagen:
+        raise HTTPException(status_code=404, detail="Imagen no encontrada")
+
+    file_path = imagen.ruta
+
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="Archivo de imagen no encontrado")
+
+    return FileResponse(file_path)
+
+@app.post("/imagenes", response_model=dict, tags=["Imágenes"])
+def subir_imagen(image: UploadFile = File(...), db: Session = Depends(get_db)):
+    file_path = os.path.join(UPLOAD_DIR, image.filename)
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(image.file, buffer)
+
+    nueva_imagen = models.Imagen(ruta=file_path)
+    db.add(nueva_imagen)
+    db.commit()
+    db.refresh(nueva_imagen)
+    return {"id": nueva_imagen.id, "ruta": nueva_imagen.ruta}
+
+@app.get("/imagenes/{imagen_id}", tags=["Imágenes"])
+def obtener_imagen(imagen_id: int, db: Session = Depends(get_db)):
+    imagen = db.query(models.Imagen).filter(models.Imagen.id == imagen_id).first()
+    if not imagen:
+        raise HTTPException(status_code=404, detail="Imagen no encontrada")
+
+    file_path = imagen.ruta
+
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="Archivo de imagen no encontrado")
+
+    return FileResponse(file_path)
+
+# ------------------------------------------------
+# Sección: Recomendaciones
+# ------------------------------------------------
+
+def parse_etiquetas_dict(etiquetas_json: str) -> Dict[str, Any]:
+    try:
+        return json.loads(etiquetas_json) if etiquetas_json else {}
+    except:
+        return {}
+
+def construir_matriz_tags(
+    adoptante_tag_dict: Dict[str, Any],
+    mascotas: List[Dict[str, Any]],
+) -> Tuple[List[str], np.ndarray, np.ndarray]:
+    adoptante_tags = []
+    for v in adoptante_tag_dict.values():
+        if isinstance(v, list):
+            adoptante_tags.extend(v)
+        elif isinstance(v, str):
+            adoptante_tags.append(v)
+
+    lista_tags_mascotas = [m["tags"] for m in mascotas]
+
+    conjuntos = [adoptante_tags] + lista_tags_mascotas
+
+    mlb = MultiLabelBinarizer()
+    mlb.fit(conjuntos)
+
+    vector_adoptante = mlb.transform([adoptante_tags])[0]
+    vectores_mascotas = mlb.transform(lista_tags_mascotas)
+
+    return mlb.classes_.tolist(), vector_adoptante, vectores_mascotas
+
+@app.get("/recomendaciones/{adoptante_id}", tags=["Recomendaciones"])
+def obtener_recomendaciones(
+    adoptante_id: int,
+    top_n: int = 0,
+    db: Session = Depends(get_db),
+):
+    adoptante = db.query(models.Adoptante).get(adoptante_id)
+    if not adoptante:
+        raise HTTPException(status_code=404, detail="Adoptante no encontrado")
+
+    etiquetas_dict = parse_etiquetas_dict(adoptante.etiquetas)
+    pesos_dict    = parse_etiquetas_dict(adoptante.pesos)
+
+    mascotas_db = db.query(models.Mascota).all()
+    if not mascotas_db:
+        return []
+
+    lista_mascotas = []
+    for m in mascotas_db:
+        try:
+            tags = json.loads(m.etiquetas) if m.etiquetas else []
+        except:
+            tags = []
+        lista_mascotas.append({
+            "id": m.id,
+            "nombre": m.nombre,
+            "especie": m.especie,
+            "edad": m.edad,
+            "descripcion": m.descripcion,
+            "albergue_id": m.albergue_id,
+            "imagen_id": m.imagen_id,
+            "tags": tags,
+        })
+
+    feature_names, vec_adopt, vecs_masc = construir_matriz_tags(etiquetas_dict, lista_mascotas)
+
+    pesos_array = np.ones(len(feature_names), dtype=float)
+    for etiqueta, peso in pesos_dict.items():
+        if etiqueta in feature_names:
+            idx = feature_names.index(etiqueta)
+            pesos_array[idx] = float(peso)
+
+    vec_adopt_pond = vec_adopt * pesos_array
+    vecs_masc_pond = vecs_masc * pesos_array
+
+    sims = cosine_similarity([vec_adopt_pond], vecs_masc_pond)[0]
+
+    for i, mascota in enumerate(lista_mascotas):
+        mascota["similitud"] = round(float(sims[i]), 4)
+    lista_mascotas.sort(key=lambda x: x["similitud"], reverse=True)
+
+    if top_n and top_n > 0:
+        lista_mascotas = lista_mascotas[:top_n]
+
+    return lista_mascotas
+
+@app.get("/matches", tags=["Recomendaciones"])
 def obtener_matches_usuario(db: Session = Depends(get_db), user=Depends(get_current_user)):
     from crud import obtener_matches
     ids = obtener_matches(db, int(user["sub"]))
     return [crud.get_user_by_id(db, id_) for id_ in ids]
 
+# ------------------------------------------------
+# Sección: Mensajes
+# ------------------------------------------------
 
-
-from fastapi import APIRouter
-from schemas import MessageIn, MessageOut
-from datetime import datetime
-from models import Mensaje as MensajeModel
-from fastapi import Depends
-from schemas import MessageIn, MessageOut
-
-@app.post("/adoptante/mensajes/enviar", response_model=MessageOut)
+@app.post("/adoptante/mensajes/enviar", response_model=MessageOut, tags=["Mensajes"])
 def enviar_mensaje(
     mensaje: MessageIn,
     db: Session = Depends(get_db),
@@ -567,10 +560,7 @@ def enviar_mensaje(
     db.refresh(nuevo_mensaje)
     return nuevo_mensaje
 
-
-
-
-@app.get("/mensajes/conversacion", response_model=List[MessageOut])
+@app.get("/mensajes/conversacion", response_model=List[MessageOut], tags=["Mensajes"])
 def obtener_conversacion(id1: int, tipo1: str, id2: int, tipo2: str, db: Session = Depends(get_db)):
     mensajes = db.query(MensajeModel).filter(
     ((MensajeModel.emisor_id == id1) & (MensajeModel.receptor_id == id2) &
@@ -581,9 +571,6 @@ def obtener_conversacion(id1: int, tipo1: str, id2: int, tipo2: str, db: Session
     ).order_by(MensajeModel.timestamp).all()
     return mensajes
 
-
-from fastapi import WebSocket
-
 @app.websocket("/ws/chat/{user_id}")
 async def chat(websocket: WebSocket, user_id: int):
     await websocket.accept()
@@ -593,20 +580,6 @@ async def chat(websocket: WebSocket, user_id: int):
         await websocket.send_text(f"Mensaje recibido de {user_id}: {data}")
 
 from sqlalchemy.orm import joinedload
-
-@app.get("/adoptante/{adoptante_id}", response_model=schemas.AdoptanteOut, summary="Obtener adoptante por ID")
-def get_adoptante_by_id(adoptante_id: int, db: Session = Depends(get_db)):
-    adoptante = (
-        db.query(models.Adoptante)
-        .options(joinedload(models.Adoptante.imagen_perfil))  # Asegura que imagen_perfil esté cargado
-        .filter(models.Adoptante.id == adoptante_id)
-        .first()
-    )
-    
-    if not adoptante:
-        raise HTTPException(status_code=404, detail="Adoptante no encontrado")
-    
-    return schemas.AdoptanteOut.from_orm_with_etiquetas(adoptante)
 
 @app.get("/albergue/{albergue_id}", response_model=schemas.AlbergueOut, summary="Obtener albergue por ID")
 def get_albergue_by_id(albergue_id: int, db: Session = Depends(get_db)):
@@ -621,7 +594,7 @@ from models import Mensaje, Adoptante, Albergue
 from database import get_db
 
 
-@app.get("/mensajes/contactos")
+@app.get("/mensajes/contactos", tags=["Mensajes"])
 def obtener_contactos_conversados(emisor_id: int, emisor_tipo: str, db: Session = Depends(get_db)):
     mensajes = db.query(Mensaje).filter(
         ((Mensaje.emisor_id == emisor_id) & (Mensaje.emisor_tipo == emisor_tipo)) |
@@ -719,3 +692,21 @@ async def websocket_chat(
 
     except WebSocketDisconnect:
         del active_connections[key]
+
+
+@app.get("/usuario/mascotas/{mascota_id}", response_model=MascotaResponse)
+def obtener_mascota_por_id(mascota_id: int, db: Session = Depends(get_db)):
+    mascota = db.query(models.Mascota).filter(models.Mascota.id == mascota_id).first()
+    if not mascota:
+        raise HTTPException(status_code=404, detail="Mascota no encontrada")
+
+    # Convertir campos string a lista si es necesario
+    if isinstance(mascota.etiquetas, str):
+        mascota.etiquetas = json.loads(mascota.etiquetas)
+    if isinstance(mascota.vacunas, str):
+        mascota.vacunas = json.loads(mascota.vacunas)
+
+    # Convertir datetime a string ISO
+    mascota.created_at = mascota.created_at.isoformat()
+
+    return mascota

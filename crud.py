@@ -10,16 +10,16 @@ from models import Mascota
 # === ADOPTANTE ===
 def create_adoptante(db: Session, adoptante: schemas.AdoptanteRegister):
     hashed_pw = bcrypt.hash(adoptante.contrasena)
-
     db_adoptante = models.Adoptante(
         nombre=adoptante.nombre,
         apellido=adoptante.apellido,
         dni=adoptante.dni,
         correo=adoptante.correo,
-        telefono=getattr(adoptante, "telefono", None),  # si agregaste teléfono
+        telefono=getattr(adoptante, "telefono", None),
         contrasena=hashed_pw,
-        etiquetas=json.dumps(adoptante.etiquetas or []),  # convertimos lista a JSON string
-        imagen_perfil_id=adoptante.imagen_perfil_id    
+        etiquetas=json.dumps(adoptante.etiquetas or {}),
+        imagen_perfil_id=adoptante.imagen_perfil_id,
+        pesos=json.dumps(adoptante.pesos or {})   # ← guardamos JSON
     )
     db.add(db_adoptante)
     db.commit()
