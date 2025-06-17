@@ -124,3 +124,12 @@ class CitaEvento(Base):
 
     # Relaciones
     calendario = relationship("Calendario", backref="evento", uselist=False)
+
+
+
+class Match(Base):
+    __tablename__ = "matches"
+    id = Column(Integer, primary_key=True, index=True)
+    adoptante_id = Column(Integer, ForeignKey("adoptante.id"))
+    mascota_id = Column(Integer, ForeignKey("mascotas.id"))
+    fecha = Column(DateTime, default=datetime.utcnow)
