@@ -710,3 +710,49 @@ def obtener_mascota_por_id(mascota_id: int, db: Session = Depends(get_db)):
     mascota.created_at = mascota.created_at.isoformat()
 
     return mascota
+
+
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+from database import get_db
+import schemas, crud
+
+router = APIRouter(prefix="/calendario", tags=["Calendario"])
+
+
+@app.post("/calendario/visita", response_model=schemas.CalendarioOut)
+def crear_visita(data: schemas.CitaVisitaCreate, db: Session = Depends(get_db)):
+    return crud.crear_cita_visita(db, data)
+
+
+@app.post("/calendario/evento", response_model=schemas.CalendarioOut)
+def crear_evento(data: schemas.CitaEventoCreate, db: Session = Depends(get_db)):
+    return crud.crear_cita_evento(db, data)
+
+
+@app.get("/calendario/albergue/{albergue_id}", response_model=list[schemas.CalendarioOut])
+def listar_citas_albergue(albergue_id: int, db: Session = Depends(get_db)):
+    return crud.obtener_citas_por_albergue(db, albergue_id)
+
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+from database import get_db
+from models import Calendario
+from schemas import CalendarioOut
+from datetime import datetime, timedelta
+
+@app.get("/calendario/dia/{fecha}", response_model=list[CalendarioOut])
+def obtener_citas_por_fecha(fecha: str, db: Session = Depends(get_db)):
+    try:
+        fecha_inicio = datetime.strptime(fecha, "%Y-%m-%d")
+        fecha_fin = fecha_inicio + timedelta(days=1)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Formato de fecha inválido (esperado: YYYY-MM-DD)")
+
+    citas = db.query(Calendario).filter(
+        Calendario.fecha_hora >= fecha_inicio,
+        Calendario.fecha_hora < fecha_fin
+    ).all()
+
+    return citas
+

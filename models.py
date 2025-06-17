@@ -83,3 +83,44 @@ class Mensaje(Base):
     receptor_tipo = Column(String, nullable=False)
     contenido = Column(String, nullable=False)
     timestamp = Column(DateTime, default=datetime.utcnow)
+
+
+
+from sqlalchemy import Column, Integer, String, ForeignKey, DateTime
+from sqlalchemy.orm import relationship
+from database import Base
+from sqlalchemy.sql import func
+
+# ===== CALENDARIO BASE =====
+class Calendario(Base):
+    __tablename__ = "calendario"
+    id = Column(Integer, primary_key=True, index=True)
+    albergue_id = Column(Integer, ForeignKey("albergue.id"), nullable=False)
+    fecha_hora = Column(DateTime(timezone=True), nullable=False)
+    asunto = Column(String, nullable=False)
+    lugar = Column(String, nullable=False)
+    tipo = Column(String, nullable=False)  # "visita" o "evento"
+    adoptante_id = Column(Integer, ForeignKey("adoptante.id"), nullable=True)
+
+    # Relaciones
+    albergue = relationship("Albergue", backref="calendario")
+
+
+# ===== CITA VISITA =====
+class CitaVisita(Base):
+    __tablename__ = "citas_visita"
+    id = Column(Integer, ForeignKey("calendario.id"), primary_key=True)
+    adoptante_id = Column(Integer, ForeignKey("adoptante.id"), nullable=False)
+
+    # Relaciones
+    calendario = relationship("Calendario", backref="visita", uselist=False)
+    adoptante = relationship("Adoptante", backref="citas_visita")
+
+
+# ===== CITA EVENTO =====
+class CitaEvento(Base):
+    __tablename__ = "citas_evento"
+    id = Column(Integer, ForeignKey("calendario.id"), primary_key=True)
+
+    # Relaciones
+    calendario = relationship("Calendario", backref="evento", uselist=False)

@@ -172,3 +172,49 @@ class MessageOut(BaseModel):
 
     class Config:
         orm_mode = True
+
+
+
+from pydantic import BaseModel
+from datetime import datetime
+from typing import Optional
+
+
+# Base para crear una cita en calendario
+class CalendarioBase(BaseModel):
+    fecha_hora: datetime
+    asunto: str
+    lugar: str
+    albergue_id: int
+
+
+# Para retornar una cita del calendario
+class CalendarioOut(CalendarioBase):
+    id: int
+
+    class Config:
+        orm_mode = True
+
+
+# Para registrar una cita de visita
+class CitaVisitaCreate(BaseModel):
+    calendario: CalendarioBase
+    adoptante_id: int
+
+
+# Para registrar una cita de evento
+class CitaEventoCreate(BaseModel):
+    calendario: CalendarioBase
+
+
+class CalendarioOut(BaseModel):
+    id: int
+    fecha_hora: datetime
+    asunto: str
+    lugar: str
+    tipo: str
+    albergue_id: int
+    adoptante_id: Optional[int] = None  # ← AÑADE ESTA LÍNEA
+
+    class Config:
+        orm_mode = True
