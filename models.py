@@ -4,7 +4,6 @@ from database import Base
 from sqlalchemy.sql import func # type: ignore
 
 
-#=====ADOPTANTE=======
 class Adoptante(Base):
     __tablename__ = "adoptante"
     id = Column(Integer, primary_key=True, index=True)
@@ -14,9 +13,17 @@ class Adoptante(Base):
     correo = Column(String, unique=True, index=True, nullable=False)
     telefono = Column(String, nullable=True)
     contrasena = Column(String, nullable=False)
-    etiquetas = Column(Text, nullable=True) 
+    etiquetas = Column(Text, nullable=True)
 
-    respuestas_usuario = relationship("RespuestaUsuario", back_populates="adoptante")
+    imagen_perfil_id = Column(Integer, ForeignKey("imagenes_perfil.id"))
+    imagen_perfil = relationship("ImagenPerfil", backref="adoptantes")
+
+
+class ImagenPerfil(Base):
+    __tablename__ = "imagenes_perfil"
+    id = Column(Integer, primary_key=True, index=True)
+    ruta = Column(String, nullable=False)
+
 
 
 #=====ALBERGUE=======
@@ -30,6 +37,7 @@ class Albergue(Base):
     contrasena = Column(String, nullable=False)
 
     mascotas = relationship("Mascota", back_populates="albergue")
+
 
 
 #=====MASCOTA=======
@@ -60,30 +68,17 @@ class Imagen(Base):
 
 
 
-#=====PREGUNTAS Y RESPUESTAS=======
-class Pregunta(Base):
-    __tablename__ = "preguntas"
+from sqlalchemy import Column, Integer, String, DateTime
+from database import Base
+from datetime import datetime
+
+class Mensaje(Base):
+    __tablename__ = "mensajes"
+
     id = Column(Integer, primary_key=True, index=True)
-    texto = Column(String, nullable=False)
-
-    respuestas_posibles = relationship("Respuesta", back_populates="pregunta")
-
-class Respuesta(Base):
-    __tablename__ = "respuestas"
-    id = Column(Integer, primary_key=True, index=True)
-    pregunta_id = Column(Integer, ForeignKey("preguntas.id"))
-    valor = Column(String, nullable=False)
-
-    pregunta = relationship("Pregunta", back_populates="respuestas_posibles")
-
-class RespuestaUsuario(Base):
-    __tablename__ = "respuestas_usuario"
-    id = Column(Integer, primary_key=True, index=True)
-    adoptante_id = Column(Integer, ForeignKey("adoptante.id"))
-    pregunta_id = Column(Integer, ForeignKey("preguntas.id"))
-    respuesta_id = Column(Integer, ForeignKey("respuestas.id"))
-
-    adoptante = relationship("Adoptante", back_populates="respuestas_usuario")
-    pregunta = relationship("Pregunta")
-    respuesta = relationship("Respuesta")
-
+    emisor_id = Column(Integer, nullable=False)
+    emisor_tipo = Column(String, nullable=False)  # "adoptante" o "albergue"
+    receptor_id = Column(Integer, nullable=False)
+    receptor_tipo = Column(String, nullable=False)
+    contenido = Column(String, nullable=False)
+    timestamp = Column(DateTime, default=datetime.utcnow)
