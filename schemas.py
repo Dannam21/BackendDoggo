@@ -13,6 +13,7 @@ class AdoptanteRegister(BaseModel):
     imagen_perfil_id: int
 
 
+
 class AlbergueRegister(BaseModel):
     nombre: str
     ruc: str
