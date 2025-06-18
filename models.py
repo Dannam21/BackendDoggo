@@ -135,3 +135,16 @@ class Match(Base):
     adoptante_id = Column(Integer, ForeignKey("adoptante.id"))
     mascota_id = Column(Integer, ForeignKey("mascotas.id"))
     fecha = Column(DateTime, default=datetime.utcnow)
+
+
+# models.py
+class Donacion(Base):
+    __tablename__ = "donaciones"
+    id = Column(Integer, primary_key=True, index=True)
+    adoptante_id = Column(Integer, ForeignKey("adoptante.id"), nullable=False)
+    mascota_id = Column(Integer, ForeignKey("mascotas.id"), nullable=False)
+    monto = Column(Integer, nullable=False)
+    fecha = Column(DateTime, default=func.now())
+
+    adoptante = relationship("Adoptante")
+    mascota = relationship("Mascota")

@@ -856,3 +856,25 @@ def obtener_mascota_por_id(mascota_id: int, db: Session = Depends(get_db)):
 def listar_matches_albergue(albergue_id: int, db: Session = Depends(get_db)):
     matches = db.query(models.Match).filter(models.Match.id == albergue_id).all()
     return matches
+
+
+# main.py (o donde tengas los endpoints de Adoptante)
+@app.post("/donar", tags=["Donaciones"])
+def donar(donacion: schemas.DonacionCreate, user=Depends(get_current_user), db: Session = Depends(get_db)):
+    adoptante_id = int(user["sub"])
+
+    # Validación
+    mascota = db.query(models.Mascota).filter(models.Mascota.id == donacion.mascota_id).first()
+    if not mascota:
+        raise HTTPException(status_code=404, detail="Mascota no encontrada")
+
+    nueva_donacion = models.Donacion(
+        adoptante_id=adoptante_id,
+        mascota_id=donacion.mascota_id,
+        monto=donacion.monto
+    )
+    db.add(nueva_donacion)
+    db.commit()
+    db.refresh(nueva_donacion)
+
+    return {"mensaje": "Donación realizada con éxito"}
