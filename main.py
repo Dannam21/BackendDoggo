@@ -82,9 +82,9 @@ def register_adoptante(user: schemas.AdoptanteRegister, db: Session = Depends(ge
     access_token = create_access_token(token_data)
 
     return {
-        "mensaje": "Adoptante registrado con éxito",
+        "access_token": access_token,
+        "token_type": "bearer",
         "id": new_adoptante.id,
-        "token": access_token
     }
 
 @app.post("/login/adoptante", tags=["Adoptante"])
