@@ -218,13 +218,3 @@ class CalendarioOut(BaseModel):
 
     class Config:
         orm_mode = True
-
-
-
-
-from pydantic import BaseModel
-
-class MatchCreate(BaseModel):
-    adoptante_id: int
-    mascota_id: int
-
