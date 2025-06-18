@@ -83,6 +83,8 @@ class Mensaje(Base):
     receptor_tipo = Column(String, nullable=False)
     contenido = Column(String, nullable=False)
     timestamp = Column(DateTime, default=datetime.utcnow)
+    mascota_id = Column(Integer, ForeignKey("mascotas.id"), nullable=False)
+
 
 
 

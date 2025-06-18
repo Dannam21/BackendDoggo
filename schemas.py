@@ -136,7 +136,7 @@ class AlbergueCreate(BaseModel):
 
 
 from pydantic import BaseModel
-from typing import Literal, Union
+from typing import Literal
 from datetime import datetime
 
 class Message(BaseModel):
@@ -146,16 +146,15 @@ class Message(BaseModel):
     receptor_tipo: Literal["adoptante", "albergue"]
     contenido: str
     timestamp: datetime
+    mascota_id: int  # ✅ Se añade el ID de la mascota
 
 from pydantic import BaseModel
-from typing import Literal, Optional
-from datetime import datetime
 
-# Modelo para recibir el mensaje sin timestamp (input)
 class MessageIn(BaseModel):
     receptor_id: int
     receptor_tipo: str
     contenido: str
+    mascota_id: int  # ✅ Requerido al enviar un mensaje
 
 # schemas.py
 
@@ -169,9 +168,11 @@ class MessageOut(BaseModel):
     receptor_tipo: str
     contenido: str
     timestamp: datetime
+    mascota_id: int  # ✅ Para mostrar a qué mascota pertenece el mensaje
 
     class Config:
         orm_mode = True
+
 
 
 

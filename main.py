@@ -376,7 +376,9 @@ def obtener_mascota(
         albergue_id=m.albergue_id,
         imagen_id=m.imagen_id,
         etiquetas=etiquetas,
-        created_at=created_at_str,  
+        created_at=created_at_str,
+        genero=m.genero,
+        vacunas=json.loads(m.vacunas) if m.vacunas else [],
     )
 
 # ------------------------------------------------
@@ -571,6 +573,37 @@ def obtener_conversacion(id1: int, tipo1: str, id2: int, tipo2: str, db: Session
     ).order_by(MensajeModel.timestamp).all()
     return mensajes
 
+
+from typing import Optional
+
+@app.get("/mensajes3/conversacion", response_model=List[MessageOut], tags=["Mensajes"])
+def obtener_conversacion(
+    id1: int,
+    tipo1: str,
+    id2: int,
+    tipo2: str,
+    mascota_id: Optional[int] = None,
+    db: Session = Depends(get_db)
+):
+    query = db.query(MensajeModel).filter(
+        (
+            (MensajeModel.emisor_id == id1) & (MensajeModel.receptor_id == id2) &
+            (MensajeModel.emisor_tipo == tipo1) & (MensajeModel.receptor_tipo == tipo2)
+        ) |
+        (
+            (MensajeModel.emisor_id == id2) & (MensajeModel.receptor_id == id1) &
+            (MensajeModel.emisor_tipo == tipo2) & (MensajeModel.receptor_tipo == tipo1)
+        )
+    )
+
+    if mascota_id is not None:
+        query = query.filter(MensajeModel.mascota_id == mascota_id)
+
+    mensajes = query.order_by(MensajeModel.timestamp).all()
+    return mensajes
+
+
+
 from fastapi import WebSocket
 
 @app.websocket("/ws/chat/{user_id}")
@@ -629,6 +662,46 @@ def obtener_contactos_conversados(emisor_id: int, emisor_tipo: str, db: Session 
     return resultado
 
 
+@app.get("/mensajes3/contactos", tags=["Mensajes"])
+def obtener_contactos_conversados(emisor_id: int, emisor_tipo: str, db: Session = Depends(get_db)):
+    mensajes = db.query(Mensaje).filter(
+        ((Mensaje.emisor_id == emisor_id) & (Mensaje.emisor_tipo == emisor_tipo)) |
+        ((Mensaje.receptor_id == emisor_id) & (Mensaje.receptor_tipo == emisor_tipo))
+    ).all()
+
+    contactos = set()  # Usamos un set para evitar duplicados exactos
+    resultado = []
+
+    for msg in mensajes:
+        if msg.emisor_id == emisor_id and msg.emisor_tipo == emisor_tipo:
+            contacto_id = msg.receptor_id
+            contacto_tipo = msg.receptor_tipo
+        else:
+            contacto_id = msg.emisor_id
+            contacto_tipo = msg.emisor_tipo
+
+        # Clave única por usuario y mascota
+        key = (contacto_id, contacto_tipo, msg.mascota_id)
+        if key not in contactos:
+            contactos.add(key)
+
+            if contacto_tipo == "adoptante":
+                user = db.query(Adoptante).filter_by(id=contacto_id).first()
+            else:
+                user = db.query(Albergue).filter_by(id=contacto_id).first()
+
+            if user:
+                resultado.append({
+                    "userId": user.id,
+                    "userType": contacto_tipo,
+                    "mascota_id": msg.mascota_id,  # 👈 Incluye mascota
+                    "name": getattr(user, "nombre", "Sin nombre"),
+                    "avatar": getattr(user, "avatar_url", "https://i.pravatar.cc/150")
+                })
+
+    return resultado
+
+
 # chat_ws.py
 from fastapi import WebSocket, WebSocketDisconnect, Depends, APIRouter, Query
 from sqlalchemy.orm import Session
@@ -651,7 +724,6 @@ async def websocket_chat(
 ):
     await websocket.accept()
 
-    # Guardamos la conexión
     key = get_user_key(emisor_id, emisor_tipo)
     active_connections[key] = websocket
 
@@ -661,13 +733,14 @@ async def websocket_chat(
 
             msg_in = MessageIn(**data)
 
-            # Guardamos el mensaje en la base de datos
+            # Guardamos el mensaje en la base de datos con mascota_id
             mensaje_db = Mensaje(
                 emisor_id=emisor_id,
                 emisor_tipo=emisor_tipo,
                 receptor_id=msg_in.receptor_id,
                 receptor_tipo=msg_in.receptor_tipo,
                 contenido=msg_in.contenido,
+                mascota_id=msg_in.mascota_id,  # ✅ GUARDAR mascota_id AQUÍ
                 timestamp=datetime.utcnow()
             )
             db.add(mensaje_db)
@@ -681,15 +754,16 @@ async def websocket_chat(
                 "receptor_id": msg_in.receptor_id,
                 "receptor_tipo": msg_in.receptor_tipo,
                 "contenido": msg_in.contenido,
-                "timestamp": mensaje_db.timestamp.isoformat()
+                "timestamp": mensaje_db.timestamp.isoformat(),
+                "mascota_id": msg_in.mascota_id  # ✅ también puedes incluirlo en la respuesta
             }
 
-            # Enviamos al receptor si está conectado
+            # Enviar al receptor si está conectado
             receptor_key = get_user_key(msg_in.receptor_id, msg_in.receptor_tipo)
             if receptor_key in active_connections:
                 await active_connections[receptor_key].send_json(message_out)
 
-            # También se lo enviamos al emisor (echo)
+            # También al emisor (echo)
             await websocket.send_json(message_out)
 
     except WebSocketDisconnect:
@@ -775,3 +849,10 @@ def obtener_mascota_por_id(mascota_id: int, db: Session = Depends(get_db)):
     mascota.created_at = mascota.created_at.isoformat()
 
     return mascota
+
+
+# Asegúrate de tener algo como esto en FastAPI
+@app.get("/matches/albergue/{albergue_id}")
+def listar_matches_albergue(albergue_id: int, db: Session = Depends(get_db)):
+    matches = db.query(models.Match).filter(models.Match.id == albergue_id).all()
+    return matches
