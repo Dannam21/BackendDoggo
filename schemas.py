@@ -1,5 +1,5 @@
 from pydantic import BaseModel # type: ignore
-from typing import Optional, List
+from typing import Optional, List, Dict, Union
 import json
 
 # === REGISTRO DE USUARIOS ===
@@ -9,9 +9,10 @@ class AdoptanteRegister(BaseModel):
     dni: str
     correo: str
     contrasena: str
-    etiquetas: List[str] = []
-    imagen_perfil_id: int
-
+    etiquetas: Dict[str, Union[str, List[str]]] = {}
+    imagen_perfil_id: Optional[int] = None
+    telefono: Optional[str] = None
+    pesos: Dict[str, float] = {}
 
 
 class AlbergueRegister(BaseModel):
@@ -20,6 +21,7 @@ class AlbergueRegister(BaseModel):
     correo: str
     contrasena: str
     telefono: Optional[str] = None
+    pesos: Dict[str, float] = {}
 
 # === LOGIN ===
 class AdoptanteLogin(BaseModel):
@@ -38,21 +40,24 @@ class AdoptanteOut(BaseModel):
     dni: str
     correo: str
     telefono: Optional[str]
-    etiquetas: List[str]
+    etiquetas: Dict[str, Union[str, List[str]]]
     imagen_perfil_id: int
+    pesos: Dict[str, float] 
 
     class Config:
         from_attributes = True
 
     @classmethod
     def from_orm_with_etiquetas(cls, adoptante_obj):
-        raw = adoptante_obj.etiquetas
-        lista = []
-        if raw:
-            try:
-                lista = json.loads(raw)
-            except Exception:
-                lista = []
+        try:
+            etiquetas = json.loads(adoptante_obj.etiquetas) if adoptante_obj.etiquetas else {}
+        except:
+            etiquetas = {}
+        # parseamos pesos
+        try:
+            pesos = json.loads(adoptante_obj.pesos) if adoptante_obj.pesos else {}
+        except:
+            pesos = {}
         return cls(
             id=adoptante_obj.id,
             nombre=adoptante_obj.nombre,
@@ -60,8 +65,9 @@ class AdoptanteOut(BaseModel):
             dni=adoptante_obj.dni,
             correo=adoptante_obj.correo,
             telefono=adoptante_obj.telefono,
-            etiquetas=lista,
+            etiquetas=etiquetas,
             imagen_perfil_id=adoptante_obj.imagen_perfil_id,
+            pesos=pesos,
         )
 
 class AdoptanteCreate(BaseModel):
