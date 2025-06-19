@@ -169,3 +169,8 @@ def crear_cita_evento(db: Session, data: schemas.CitaEventoCreate):
 
 def obtener_citas_por_albergue(db: Session, albergue_id: int):
     return db.query(Calendario).filter(Calendario.albergue_id == albergue_id).all()
+
+
+
+
+

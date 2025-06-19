@@ -88,7 +88,7 @@ class Mensaje(Base):
 
 
 
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime
+from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Float
 from sqlalchemy.orm import relationship
 from database import Base
 from sqlalchemy.sql import func
@@ -138,8 +138,8 @@ class Match(Base):
 
 
 # models.py
-class Donacion(Base):
-    __tablename__ = "donaciones"
+class Donacion2(Base):
+    __tablename__ = "donaciones2"
     id = Column(Integer, primary_key=True, index=True)
     adoptante_id = Column(Integer, ForeignKey("adoptante.id"), nullable=False)
     mascota_id = Column(Integer, ForeignKey("mascotas.id"), nullable=False)
@@ -148,3 +148,30 @@ class Donacion(Base):
 
     adoptante = relationship("Adoptante")
     mascota = relationship("Mascota")
+
+
+
+# ------------------------------------------------
+# Modelo SQLAlchemy para Donaciones (agregar a models.py)
+# ------------------------------------------------
+
+class Donacion(Base):
+    __tablename__ = "donaciones"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, index=True)  # ID del adoptante
+    mascota_id = Column(Integer, index=True)  # ID de la mascota
+    amount = Column(Float, nullable=False)
+    preference_id = Column(String(255), unique=True, index=True)
+    payment_id = Column(String(255), nullable=True, index=True)
+    status = Column(String(50), default="pending")  # pending, approved, rejected, cancelled
+    external_reference = Column(String(255), unique=True, index=True)
+    mp_status = Column(String(50), nullable=True)  # Estado específico de MercadoPago
+    mp_status_detail = Column(String(100), nullable=True)
+    transaction_amount = Column(Float, nullable=True)
+    net_received_amount = Column(Float, nullable=True)
+    fee_details = Column(Text, nullable=True)  # JSON con detalles de comisiones
+    payer_email = Column(String(255), nullable=True)
+    payment_method_id = Column(String(100), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

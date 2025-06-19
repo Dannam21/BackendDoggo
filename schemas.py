@@ -231,6 +231,6 @@ class MatchCreate(BaseModel):
 
 
 # schemas.py
-class DonacionCreate(BaseModel):
+class DonacionCreate2(BaseModel):
     mascota_id: int
     monto: int
