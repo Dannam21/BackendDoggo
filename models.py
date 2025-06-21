@@ -121,7 +121,7 @@ class CitaEvento(Base):
 
 class Match(Base):
     __tablename__ = "matches"
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     adoptante_id = Column(Integer, ForeignKey("adoptante.id"), primary_key=True)
     mascota_id   = Column(Integer, ForeignKey("mascotas.id"),  primary_key=True)
     fecha = Column(DateTime, default=datetime.utcnow)

@@ -13,7 +13,7 @@ from sklearn.metrics.pairwise import cosine_similarity # type: ignore
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, APIRouter, WebSocket # type: ignore
 from models import Adoptante, Albergue, Mascota, Imagen
 from sqlalchemy.orm import Session
-from schemas import MessageIn, MessageOut, MascotaResponse
+from schemas import MessageIn, MessageOut, MascotaResponse, AdoptanteUpdate
 from datetime import datetime
 from models import Mensaje as MensajeModel
 from auth import create_access_token
@@ -123,6 +123,50 @@ def get_adoptante_by_id(adoptante_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Adoptante no encontrado")
     
     return schemas.AdoptanteOut.from_orm_with_etiquetas(adoptante)
+
+@app.put(
+    "/adoptante/{adoptante_id}",
+    response_model=schemas.AdoptanteOut,
+    summary="Actualizar datos del adoptante autenticado",
+    tags=["Adoptante"],
+)
+def update_adoptante(
+    adoptante_id: int,
+    datos: AdoptanteUpdate,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    # 1) Solo el propio adoptante puede editar su perfil
+    if user.get("rol") != "adoptante" or int(user["sub"]) != adoptante_id:
+        raise HTTPException(status_code=403, detail="No tienes permiso para editar este perfil")
+
+    # 2) Buscamos al adoptante
+    adoptante = db.query(models.Adoptante).filter(models.Adoptante.id == adoptante_id).first()
+    if not adoptante:
+        raise HTTPException(status_code=404, detail="Adoptante no encontrado")
+
+    # 3) Si se quiere cambiar correo, comprobamos que no exista ya
+    if datos.correo and datos.correo != adoptante.correo:
+        existe = db.query(models.Adoptante).filter(models.Adoptante.correo == datos.correo).first()
+        if existe:
+            raise HTTPException(status_code=400, detail="Ya existe un adoptante con ese correo")
+        adoptante.correo = datos.correo
+
+    # 4) Actualizamos los campos permitidos si vienen en la petición
+    if datos.nombre is not None:
+        adoptante.nombre = datos.nombre
+    if datos.apellido is not None:
+        adoptante.apellido = datos.apellido
+    if datos.telefono is not None:
+        adoptante.telefono = datos.telefono
+
+    # 5) Guardamos los cambios
+    db.commit()
+    db.refresh(adoptante)
+
+    # 6) Devolvemos el adoptante actualizado (incluyendo etiquetas/pesos si los tienes)
+    return schemas.AdoptanteOut.from_orm_with_etiquetas(adoptante)
+
 
 # ------------------------------------------------
 # Sección: Albergue
@@ -845,6 +889,26 @@ def listar_matches(adoptante_id: int, db: Session = Depends(get_db)):
     matches = db.query(models.Match).filter(models.Match.adoptante_id == adoptante_id).all()
     return matches
 
+@app.get("/matches/adoptante/{adoptante_id}")
+def listar_matches_adoptante(adoptante_id: int, db: Session = Depends(get_db)):
+    matches = (
+        db.query(models.Match)
+          .options(joinedload(models.Match.mascota))  # carga la relación mascota
+          .filter(models.Match.adoptante_id == adoptante_id)
+          .all()
+    )
+    return [
+        {
+            "mascota": {
+                "id": m.mascota.id,
+                "nombre": m.mascota.nombre,
+                "imagen_id": m.mascota.imagen_id
+            },
+            "fecha": m.fecha.isoformat()
+        }
+        for m in matches
+    ]
+
 @app.get("/usuario/mascotas/{mascota_id}", response_model=MascotaResponse)
 def obtener_mascota_por_id(mascota_id: int, db: Session = Depends(get_db)):
     mascota = db.query(models.Mascota).filter(models.Mascota.id == mascota_id).first()
@@ -863,9 +927,79 @@ def obtener_mascota_por_id(mascota_id: int, db: Session = Depends(get_db)):
     return mascota
 
 @app.get("/matches/albergue/{albergue_id}")
-def listar_matches_albergue(albergue_id: int, db: Session = Depends(get_db)):
-    matches = db.query(models.Match).filter(models.Match.id == albergue_id).all()
-    return matches
+def listar_matches_albergue(
+    albergue_id: int,
+    db: Session = Depends(get_db)
+):
+    if not db.query(models.Albergue).get(albergue_id):
+        raise HTTPException(status_code=404, detail="Albergue no encontrado")
+
+    matches = (
+        db.query(models.Match)
+        .join(models.Mascota, models.Match.mascota)                     # une la mascota
+        .options(                                                       # carga relaciones útiles
+            joinedload(models.Match.adoptante),
+            joinedload(models.Match.mascota)
+        )
+        .filter(models.Mascota.albergue_id == albergue_id)             # filtro por tu albergue
+        .all()
+    )
+
+    return [
+        {
+            "adoptante": {
+                "id": m.adoptante.id,
+                "nombre": m.adoptante.nombre,
+                "imagen_perfil_id": m.adoptante.imagen_perfil_id
+            },
+            "mascota": {
+                "id": m.mascota.id,
+                "nombre": m.mascota.nombre,
+                "imagen_id": m.mascota.imagen_id
+            },
+            "fecha": m.fecha.isoformat()
+        }
+        for m in matches
+    ]
+
+@app.get("/adopciones/albergue/{albergue_id}", tags=["Adopciones"])
+def listar_adopciones_albergue(
+    albergue_id: int,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    # 1) Solo el albergue dueño puede consultar
+    if user["rol"] != "albergue" or int(user["sub"]) != albergue_id:
+        raise HTTPException(status_code=403, detail="Acceso denegado")
+
+    # 2) Verificamos que exista
+    if not db.query(models.Albergue).get(albergue_id):
+        raise HTTPException(status_code=404, detail="Albergue no encontrado")
+
+    # 3) Hacemos JOIN de Adopcion → Mascota y filtramos por albergue
+    adopciones = (
+        db.query(models.Adopcion)
+          .join(models.Mascota, models.Adopcion.mascota)
+          .options(joinedload(models.Adopcion.mascota))
+          .filter(models.Mascota.albergue_id == albergue_id)
+          .all()
+    )
+
+    # 4) Serializamos un JSON sencillo
+    return [
+        {
+            "id": a.id,
+            "mascota": {
+              "id": a.mascota.id,
+              "nombre": a.mascota.nombre,
+              "imagen_id": a.mascota.imagen_id
+            },
+            "adoptante_id": a.adoptante_id,
+            "fecha": a.fecha.isoformat()
+        }
+        for a in adopciones
+    ]
+
 
 @app.post("/donar", tags=["Donaciones"])
 def donar(donacion: schemas.DonacionCreate, user=Depends(get_current_user), db: Session = Depends(get_db)):
@@ -933,7 +1067,6 @@ def listar_adopciones_adoptante(
         }
         for a in adopciones
     ]
-
 
 # -----------------------------------
 # Endpoints de Denegaciones

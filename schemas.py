@@ -1,4 +1,4 @@
-from pydantic import BaseModel # type: ignore
+from pydantic import BaseModel, EmailStr # type: ignore
 from typing import Optional, List, Dict, Union
 import json
 
@@ -78,6 +78,12 @@ class AdoptanteCreate(BaseModel):
     contrasena: str
     telefono: Optional[str] = None
     imagen_perfil_id: int
+    
+class AdoptanteUpdate(BaseModel):
+    nombre: Optional[str]
+    apellido: Optional[str]
+    correo: Optional[EmailStr]
+    telefono: Optional[str]
 
 #=====MASCOTA=======
 class MascotaCreate(BaseModel):

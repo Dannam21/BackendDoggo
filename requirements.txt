@@ -9,3 +9,5 @@ python-jose[cryptography]
 python-multipart
 bcrypt
 pytz
+websockets
+email-validator
