@@ -859,455 +859,318 @@ def listar_matches_albergue(albergue_id: int, db: Session = Depends(get_db)):
     return matches
 
 
-# main.py (o donde tengas los endpoints de Adoptante)
-@app.post("/donar", tags=["Donaciones"])
-def donar(donacion: schemas.DonacionCreate2, user=Depends(get_current_user), db: Session = Depends(get_db)):
-    adoptante_id = int(user["sub"])
 
-    # Validación
+
+# Agregar a main.py
+
+import mercadopago
+import os
+from fastapi import BackgroundTasks
+from typing import List
+
+# Configuración de Mercado Pago
+MP_ACCESS_TOKEN = os.getenv("")  # Cambiar por tu token real
+
+# ------------------------------------------------
+# Sección: Configuración Mercado Pago
+# ------------------------------------------------
+
+@app.post("/albergue/mercadopago/configurar", tags=["Donaciones"])
+def configurar_mercadopago(
+    config: schemas.ConfiguracionMPCreate,
+    db: Session = Depends(get_db),
+    user = Depends(get_current_user)
+):
+    if user["rol"] != "albergue":
+        raise HTTPException(status_code=403, detail="Solo los albergues pueden configurar Mercado Pago")
+    
+    albergue_id = int(user["albergue_id"])
+    
+    # Verificar si ya existe configuración
+    config_existente = db.query(models.ConfiguracionMercadoPago).filter(
+        models.ConfiguracionMercadoPago.albergue_id == albergue_id
+    ).first()
+    
+    if config_existente:
+        # Actualizar configuración existente
+        config_existente.access_token = config.access_token
+        config_existente.public_key = config.public_key
+        config_existente.webhook_url = config.webhook_url
+        config_existente.updated_at = datetime.utcnow()
+    else:
+        # Crear nueva configuración
+        config_existente = models.ConfiguracionMercadoPago(
+            albergue_id=albergue_id,
+            access_token=config.access_token,
+            public_key=config.public_key,
+            webhook_url=config.webhook_url
+        )
+        db.add(config_existente)
+    
+    db.commit()
+    db.refresh(config_existente)
+    
+    return {"mensaje": "Configuración de Mercado Pago actualizada", "id": config_existente.id}
+
+@app.get("/albergue/mercadopago/configuracion", response_model=schemas.ConfiguracionMPResponse, tags=["Donaciones"])
+def obtener_configuracion_mp(
+    db: Session = Depends(get_db),
+    user = Depends(get_current_user)
+):
+    if user["rol"] != "albergue":
+        raise HTTPException(status_code=403, detail="Solo los albergues pueden ver su configuración")
+    
+    albergue_id = int(user["albergue_id"])
+    config = db.query(models.ConfiguracionMercadoPago).filter(
+        models.ConfiguracionMercadoPago.albergue_id == albergue_id
+    ).first()
+    
+    if not config:
+        raise HTTPException(status_code=404, detail="Configuración de Mercado Pago no encontrada")
+    
+    return config
+
+# ------------------------------------------------
+# Sección: Donaciones
+# ------------------------------------------------
+
+@app.post("/donaciones/crear", response_model=schemas.PreferenceResponse, tags=["Donaciones"])
+def crear_donacion(
+    donacion: schemas.DonacionCreate,
+    db: Session = Depends(get_db),
+    user = Depends(get_current_user)
+):
+    if user["rol"] != "adoptante":
+        raise HTTPException(status_code=403, detail="Solo los adoptantes pueden hacer donaciones")
+    
+    adoptante_id = int(user["sub"])
+    
+    # Verificar que la mascota existe
     mascota = db.query(models.Mascota).filter(models.Mascota.id == donacion.mascota_id).first()
     if not mascota:
         raise HTTPException(status_code=404, detail="Mascota no encontrada")
-
-    nueva_donacion = models.Donacion2(
+    
+    # Obtener configuración de Mercado Pago del albergue
+    config_mp = db.query(models.ConfiguracionMercadoPago).filter(
+        models.ConfiguracionMercadoPago.albergue_id == mascota.albergue_id,
+        models.ConfiguracionMercadoPago.activo == True
+    ).first()
+    
+    if not config_mp:
+        raise HTTPException(status_code=400, detail="El albergue no tiene configurado Mercado Pago")
+    
+    # Crear registro de donación
+    nueva_donacion = models.Donacion(
         adoptante_id=adoptante_id,
         mascota_id=donacion.mascota_id,
-        monto=donacion.monto
+        albergue_id=mascota.albergue_id,
+        monto=donacion.monto,
+        mensaje=donacion.mensaje,
+        estado="pendiente"
     )
     db.add(nueva_donacion)
     db.commit()
     db.refresh(nueva_donacion)
-
-    return {"mensaje": "Donación realizada con éxito"}
-
-
-
-
-
-# Agrega estas importaciones al inicio de tu archivo main.py
-import uuid
-from datetime import datetime
-from sqlalchemy import Column, Integer, String, Float, DateTime, Text
-from pydantic import BaseModel
-from typing import Optional
-import os
-import mercadopago  # type: ignore # Import MercadoPago SDK
-
-from models import Donacion  # Asegúrate de tener el modelo Donacion definido
-
-# Cargar variables de entorno
-# Configurar MercadoPago
-MERCADOPAGO_ACCESS_TOKEN =  ""
-print("Access Token de MercadoPago:", MERCADOPAGO_ACCESS_TOKEN)  # 💥 Verifica que este token sea correcto
-sdk = mercadopago.SDK(MERCADOPAGO_ACCESS_TOKEN)
-# ------------------------------------------------
-# Modelos Pydantic para Donaciones
-# ------------------------------------------------
-
-class DonacionCreate(BaseModel):
-    amount: float
-    dogId: int
-    dogName: str
-    description: Optional[str] = None
-
-class DonacionResponse(BaseModel):
-    preferenceId: str
-    initPoint: str
-    externalReference: str
-
-class WebhookData(BaseModel):
-    id: str
-    live_mode: bool
-    type: str
-    date_created: str
-    application_id: str
-    user_id: str
-    version: str
-    api_version: str
-    action: str
-    data: dict
-
-
-# ------------------------------------------------
-# Endpoints de Donaciones
-# ------------------------------------------------
-
-@app.post("/crear-donacion", response_model=DonacionResponse, tags=["Donaciones"])
-def crear_donacion(
-    donacion: DonacionCreate,
-    db: Session = Depends(get_db),
-    user = Depends(get_current_user)
-):
-    """Crear preferencia de pago para donación"""
     
-    # Validaciones
-    if donacion.amount < 1:  # Mínimo 1 sol
-        raise HTTPException(status_code=400, detail="El monto mínimo es S/ 1.00")
+    # Configurar Mercado Pago SDK
+    sdk = mercadopago.SDK(config_mp.access_token)
     
-    if user["rol"] != "adoptante":
-        raise HTTPException(status_code=403, detail="Solo los adoptantes pueden hacer donaciones")
-    
-    # Verificar que la mascota existe
-    mascota = db.query(models.Mascota).filter(models.Mascota.id == donacion.dogId).first()
-    if not mascota:
-        raise HTTPException(status_code=404, detail="Mascota no encontrada")
-    
-    # Obtener datos del adoptante
-    adoptante_id = int(user["sub"])
+    # Obtener información del adoptante
     adoptante = db.query(models.Adoptante).filter(models.Adoptante.id == adoptante_id).first()
-    if not adoptante:
-        raise HTTPException(status_code=404, detail="Adoptante no encontrado")
     
-    # Generar referencia externa única
-    external_reference = f"{adoptante_id}-{donacion.dogId}-{uuid.uuid4().hex[:8]}"
-    
-    try:
-        # Crear preferencia de MercadoPago
-        preference_data = {
-            "items": [
-                {
-                    "title": f"Donación para {donacion.dogName}",
-                    "quantity": 1,
-                    "unit_price": float(donacion.amount),
-                    "currency_id": "PEN",
-                    "description": donacion.description or f"Donación para ayudar a {donacion.dogName}"
-                }
-            ],
-            "payer": {
-                "name": adoptante.nombre,
-                "surname": adoptante.apellido,
-                "email": adoptante.correo,
-                "phone": {
-                    "area_code": "51",
-                    "number": adoptante.telefono or "999999999"
-                },
-                "address": {
-                    "street_name": "Lima",
-                    "street_number": 123,
-                    "zip_code": "15001"
-                }
-            },
-            "back_urls": {
-                "success": f"{os.getenv('FRONTEND_URL', 'https://choice-lion-saving.ngrok-free.app:5173')}/donacion/exito",
-                "failure": f"{os.getenv('FRONTEND_URL', 'https://choice-lion-saving.ngrok-free.app:5173')}/donacion/error",
-                "pending": f"{os.getenv('FRONTEND_URL', 'https://choice-lion-saving.ngrok-free.app:5173')}/donacion/pendiente"
-            },
-            # "auto_return": "approved",
-            "external_reference": external_reference,
-            "notification_url": f"{os.getenv('BACKEND_URL', 'http://localhost:8000')}/webhook/mercadopago",
-            "statement_descriptor": "DOGGO DONACION",
-            "metadata": {
-                "user_id": adoptante_id,
-                "mascota_id": donacion.dogId,
-                "mascota_nombre": donacion.dogName
-            }
+    # Crear preferencia de pago
+    preference_data = {
+    "items": [
+        {
+            "title": f"Donación para {mascota.nombre}",
+            "description": f"Donación para la mascota {mascota.nombre} del albergue",
+            "quantity": 1,
+            "unit_price": donacion.monto,
+            "currency_id": "PEN"
         }
-        
-        # Crear preferencia en MercadoPago
-        print("Preference data:", preference_data)
-        preference_response = sdk.preference().create(preference_data)
-        print("Preference data:", preference_data)
+    ],
+    "payer": {
+        "name": adoptante.nombre,
+        "surname": adoptante.apellido,
+        "email": adoptante.correo
+    },
+    "back_urls": {
+        "success": f"https://choice-lion-saving.ngrok-free.app/donacion/exito?donacion_id={nueva_donacion.id}",
+        "failure": f"https://choice-lion-saving.ngrok-free.app/donacion/fallo?donacion_id={nueva_donacion.id}",
+        "pending": f"https://choice-lion-saving.ngrok-free.app/donacion/pendiente?donacion_id={nueva_donacion.id}"
+    },
+    "auto_return": "approved",
+    "external_reference": str(nueva_donacion.id),
+    "notification_url": f"https://choice-lion-saving.ngrok-free.app/donaciones/webhook/{nueva_donacion.id}",
+}
+    print("Donación ID:", nueva_donacion.id)
+    print("Back URL Success:", f"https://choice-lion-saving.ngrok-free.app/donacion/exito?donacion_id={nueva_donacion.id}")
 
+    
+    import json
+    print("Preference Data:", json.dumps(preference_data, indent=2))
+
+    preference_response = sdk.preference().create(preference_data)
+    print("Preferencia MercadoPago:", preference_response)
+
+    print("Preferencia MercadoPago:", preference_response)
+    if preference_response["status"] == 201:
+        preference_id = preference_response["response"]["id"]
+        init_point = preference_response["response"]["init_point"]
+        sandbox_init_point = preference_response["response"]["sandbox_init_point"]
         
-        if preference_response["status"] != 201:
-            print("Error de MercadoPago:", preference_response["response"])  # 💥 más info aquí
-            raise HTTPException(status_code=500, detail="Error al crear preferencia de pago")
-        
-        preference = preference_response["response"]
-        
-        # Guardar donación en base de datos
-        nueva_donacion = Donacion(
-            user_id=adoptante_id,
-            mascota_id=donacion.dogId,
-            amount=donacion.amount,
-            preference_id=preference["id"],
-            external_reference=external_reference,
-            status="pending"
-        )
-        
-        db.add(nueva_donacion)
+        # Actualizar donación con preference_id
+        nueva_donacion.mp_preference_id = preference_id
         db.commit()
-        db.refresh(nueva_donacion)
         
-        return DonacionResponse(
-            preferenceId=preference["id"],
-            initPoint=preference["sandbox_init_point"],
-            externalReference=external_reference
+        return schemas.PreferenceResponse(
+            preference_id=preference_id,
+            init_point=init_point,
+            sandbox_init_point=sandbox_init_point
         )
-        
-    except Exception as e:
-        db.rollback()
-        print(f"Error al crear donación: {str(e)}")
-        raise HTTPException(status_code=500, detail="Error interno del servidor")
+    else:
+        raise HTTPException(status_code=400, detail="Error al crear preferencia de pago")
 
-@app.post("/webhook/mercadopago", tags=["Donaciones"])
-async def webhook_mercadopago(
-    webhook_data: dict,
+@app.post("/donaciones/webhook", tags=["Donaciones"])
+def webhook_mercadopago(
+    notification: dict,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
 ):
-    """Webhook para recibir notificaciones de MercadoPago"""
-    
-    try:
-        # Verificar que es una notificación de pago
-        if webhook_data.get("type") != "payment":
-            return {"status": "ignored"}
-        
-        payment_id = webhook_data.get("data", {}).get("id")
-        if not payment_id:
-            return {"status": "no_payment_id"}
-        
-        # Obtener información del pago desde MercadoPago
-        payment_response = sdk.payment().get(payment_id)
-        
-        if payment_response["status"] != 200:
-            print(f"Error al obtener pago {payment_id}: {payment_response}")
-            return {"status": "error"}
-        
-        payment_data = payment_response["response"]
-        external_reference = payment_data.get("external_reference")
-        
-        if not external_reference:
-            print(f"Pago sin referencia externa: {payment_id}")
-            return {"status": "no_reference"}
-        
-        # Buscar donación en base de datos
-        donacion = db.query(Donacion).filter(
-            Donacion.external_reference == external_reference
-        ).first()
-        
-        if not donacion:
-            print(f"Donación no encontrada para referencia: {external_reference}")
-            return {"status": "donation_not_found"}
-        
-        # Actualizar estado de la donación
-        donacion.payment_id = payment_id
-        donacion.mp_status = payment_data.get("status")
-        donacion.mp_status_detail = payment_data.get("status_detail")
-        donacion.transaction_amount = payment_data.get("transaction_amount")
-        donacion.net_received_amount = payment_data.get("transaction_details", {}).get("net_received_amount")
-        donacion.payer_email = payment_data.get("payer", {}).get("email")
-        donacion.payment_method_id = payment_data.get("payment_method_id")
-        donacion.updated_at = datetime.utcnow()
-        
-        # Mapear estado de MercadoPago a estado interno
-        mp_status = payment_data.get("status")
-        if mp_status == "approved":
-            donacion.status = "approved"
-        elif mp_status == "rejected":
-            donacion.status = "rejected"
-        elif mp_status == "cancelled":
-            donacion.status = "cancelled"
-        elif mp_status in ["pending", "in_process"]:
-            donacion.status = "pending"
-        else:
-            donacion.status = "unknown"
-        
-        # Guardar detalles de comisiones si están disponibles
-        if "fee_details" in payment_data:
-            donacion.fee_details = json.dumps(payment_data["fee_details"])
-        
-        db.commit()
-        
-        # Si el pago fue aprobado, podrías enviar notificaciones
-        if mp_status == "approved":
-            await enviar_notificacion_donacion_exitosa(donacion, db)
-        
-        return {"status": "processed"}
-        
-    except Exception as e:
-        print(f"Error en webhook: {str(e)}")
-        db.rollback()
-        return {"status": "error", "message": str(e)}
+    background_tasks.add_task(procesar_notificacion_mp, notification, db)
+    return {"status": "ok"}
 
-@app.get("/donaciones/mis-donaciones", tags=["Donaciones"])
-def obtener_mis_donaciones(
+def procesar_notificacion_mp(notification: dict, db: Session):
+    try:
+        if notification.get("type") == "payment":
+            payment_id = notification["data"]["id"]
+            
+            sdk = mercadopago.SDK("TU_ACCESS_TOKEN_AQUI")  # reemplaza con tu token
+
+            payment_info = sdk.payment().get(payment_id)
+            if payment_info["status"] == 200:
+                payment_data = payment_info["response"]
+
+                donacion_id = int(payment_data.get("external_reference"))
+                donacion = db.query(models.Donacion).filter(models.Donacion.id == donacion_id).first()
+                if not donacion:
+                    print("❌ Donación no encontrada")
+                    return
+
+                # Actualiza la donación
+                donacion.mp_payment_id = str(payment_id)
+                donacion.mp_payment_status = payment_data["status"]
+                donacion.mp_payment_method = payment_data.get("payment_method_id")
+
+                if payment_data["status"] == "approved":
+                    donacion.estado = "completada"
+                elif payment_data["status"] in ["rejected", "cancelled"]:
+                    donacion.estado = "fallida"
+                else:
+                    donacion.estado = "pendiente"
+
+                donacion.updated_at = datetime.utcnow()
+                db.commit()
+
+                print(f"✅ Donación {donacion.id} actualizada con estado: {donacion.estado}")
+
+    except Exception as e:
+        print(f"❌ Error procesando webhook: {e}")
+
+
+@app.get("/donaciones/adoptante", response_model=List[schemas.DonacionResponse], tags=["Donaciones"])
+def obtener_donaciones_adoptante(
     db: Session = Depends(get_db),
     user = Depends(get_current_user)
 ):
-    """Obtener donaciones del usuario autenticado"""
-    
     if user["rol"] != "adoptante":
         raise HTTPException(status_code=403, detail="Solo los adoptantes pueden ver sus donaciones")
     
     adoptante_id = int(user["sub"])
     
-    donaciones = db.query(Donacion).filter(
-        Donacion.user_id == adoptante_id
-    ).order_by(Donacion.created_at.desc()).all()
+    donaciones = db.query(models.Donacion).filter(
+        models.Donacion.adoptante_id == adoptante_id
+    ).order_by(models.Donacion.created_at.desc()).all()
     
     resultado = []
     for donacion in donaciones:
-        # Obtener datos de la mascota
+        # Obtener nombres relacionados
         mascota = db.query(models.Mascota).filter(models.Mascota.id == donacion.mascota_id).first()
+        albergue = db.query(models.Albergue).filter(models.Albergue.id == donacion.albergue_id).first()
         
-        resultado.append({
-            "id": donacion.id,
-            "amount": donacion.amount,
-            "status": donacion.status,
-            "mp_status": donacion.mp_status,
-            "payment_id": donacion.payment_id,
-            "created_at": donacion.created_at.isoformat(),
-            "mascota": {
-                "id": mascota.id if mascota else None,
-                "nombre": mascota.nombre if mascota else "Mascota no encontrada",
-                "imagen_id": mascota.imagen_id if mascota else None
-            },
-            "transaction_amount": donacion.transaction_amount,
-            "net_received_amount": donacion.net_received_amount
-        })
+        donacion_response = schemas.DonacionResponse(
+            id=donacion.id,
+            adoptante_id=donacion.adoptante_id,
+            mascota_id=donacion.mascota_id,
+            albergue_id=donacion.albergue_id,
+            monto=donacion.monto,
+            mensaje=donacion.mensaje,
+            estado=donacion.estado,
+            mp_preference_id=donacion.mp_preference_id,
+            created_at=donacion.created_at,
+            mascota_nombre=mascota.nombre if mascota else None,
+            albergue_nombre=albergue.nombre if albergue else None
+        )
+        resultado.append(donacion_response)
     
     return resultado
 
-@app.get("/donaciones/estado/{external_reference}", tags=["Donaciones"])
-def consultar_estado_donacion(
-    external_reference: str,
+@app.get("/donaciones/albergue", response_model=List[schemas.DonacionResponse], tags=["Donaciones"])
+def obtener_donaciones_albergue(
     db: Session = Depends(get_db),
     user = Depends(get_current_user)
 ):
-    """Consultar estado de una donación específica"""
-    
-    if user["rol"] != "adoptante":
-        raise HTTPException(status_code=403, detail="Solo los adoptantes pueden consultar donaciones")
-    
-    adoptante_id = int(user["sub"])
-    
-    donacion = db.query(Donacion).filter(
-        Donacion.external_reference == external_reference,
-        Donacion.user_id == adoptante_id
-    ).first()
-    
-    if not donacion:
-        raise HTTPException(status_code=404, detail="Donación no encontrada")
-    
-    # Obtener datos de la mascota
-    mascota = db.query(models.Mascota).filter(models.Mascota.id == donacion.mascota_id).first()
-    
-    return {
-        "id": donacion.id,
-        "amount": donacion.amount,
-        "status": donacion.status,
-        "mp_status": donacion.mp_status,
-        "mp_status_detail": donacion.mp_status_detail,
-        "payment_id": donacion.payment_id,
-        "created_at": donacion.created_at.isoformat(),
-        "updated_at": donacion.updated_at.isoformat(),
-        "mascota": {
-            "id": mascota.id if mascota else None,
-            "nombre": mascota.nombre if mascota else "Mascota no encontrada",
-            "imagen_id": mascota.imagen_id if mascota else None
-        },
-        "transaction_amount": donacion.transaction_amount,
-        "net_received_amount": donacion.net_received_amount,
-        "payer_email": donacion.payer_email,
-        "payment_method_id": donacion.payment_method_id
-    }
-
-# ------------------------------------------------
-# Estadísticas de Donaciones (Para Albergues)
-# ------------------------------------------------
-
-@app.get("/albergue/donaciones/estadisticas", tags=["Donaciones"])
-def obtener_estadisticas_donaciones(
-    db: Session = Depends(get_db),
-    user = Depends(get_current_user)
-):
-    """Obtener estadísticas de donaciones para el albergue"""
-    
     if user["rol"] != "albergue":
-        raise HTTPException(status_code=403, detail="Solo los albergues pueden ver estadísticas")
+        raise HTTPException(status_code=403, detail="Solo los albergues pueden ver sus donaciones")
     
     albergue_id = int(user["albergue_id"])
     
-    # Obtener mascotas del albergue
-    mascotas_ids = db.query(models.Mascota.id).filter(
-        models.Mascota.albergue_id == albergue_id
-    ).all()
-    mascota_ids_list = [m[0] for m in mascotas_ids]
+    donaciones = db.query(models.Donacion).filter(
+        models.Donacion.albergue_id == albergue_id
+    ).order_by(models.Donacion.created_at.desc()).all()
     
-    if not mascota_ids_list:
-        return {
-            "total_donaciones": 0,
-            "monto_total": 0,
-            "donaciones_aprobadas": 0,
-            "monto_neto_recibido": 0,
-            "donaciones_por_mascota": []
-        }
-    
-    # Estadísticas generales
-    donaciones_query = db.query(Donacion).filter(
-        Donacion.mascota_id.in_(mascota_ids_list)
-    )
-    
-    total_donaciones = donaciones_query.count()
-    donaciones_aprobadas = donaciones_query.filter(Donacion.status == "approved").count()
-    
-    # Montos
-    monto_total = db.query(
-        func.sum(Donacion.amount)
-    ).filter(
-        Donacion.mascota_id.in_(mascota_ids_list)
-    ).scalar() or 0
-    
-    monto_neto = db.query(
-        func.sum(Donacion.net_received_amount)
-    ).filter(
-        Donacion.mascota_id.in_(mascota_ids_list),
-        Donacion.status == "approved"
-    ).scalar() or 0
-    
-    # Donaciones por mascota
-    donaciones_por_mascota = db.query(
-        models.Mascota.id,
-        models.Mascota.nombre,
-        func.count(Donacion.id).label("total_donaciones"),
-        func.sum(Donacion.amount).label("monto_total"),
-        func.sum(Donacion.net_received_amount).label("monto_neto")
-    ).outerjoin(
-        Donacion, models.Mascota.id == Donacion.mascota_id
-    ).filter(
-        models.Mascota.albergue_id == albergue_id
-    ).group_by(
-        models.Mascota.id, models.Mascota.nombre
-    ).all()
-    
-    estadisticas_mascotas = []
-    for mascota_stat in donaciones_por_mascota:
-        estadisticas_mascotas.append({
-            "mascota_id": mascota_stat.id,
-            "nombre": mascota_stat.nombre,
-            "total_donaciones": mascota_stat.total_donaciones or 0,
-            "monto_total": float(mascota_stat.monto_total or 0),
-            "monto_neto": float(mascota_stat.monto_neto or 0)
-        })
-    
-    return {
-        "total_donaciones": total_donaciones,
-        "monto_total": float(monto_total),
-        "donaciones_aprobadas": donaciones_aprobadas,
-        "monto_neto_recibido": float(monto_neto),
-        "donaciones_por_mascota": estadisticas_mascotas
-    }
-
-# ------------------------------------------------
-# Función auxiliar para notificaciones
-# ------------------------------------------------
-
-async def enviar_notificacion_donacion_exitosa(donacion: Donacion, db: Session):
-    """Enviar notificación cuando una donación es exitosa"""
-    try:
-        # Obtener datos del adoptante y mascota
-        adoptante = db.query(models.Adoptante).filter(models.Adoptante.id == donacion.user_id).first()
+    resultado = []
+    for donacion in donaciones:
+        # Obtener nombres relacionados
+        adoptante = db.query(models.Adoptante).filter(models.Adoptante.id == donacion.adoptante_id).first()
         mascota = db.query(models.Mascota).filter(models.Mascota.id == donacion.mascota_id).first()
         
-        if adoptante and mascota:
-            # Aquí puedes implementar el envío de email, notificación push, etc.
-            print(f"✅ Donación exitosa: {adoptante.nombre} donó S/ {donacion.amount} para {mascota.nombre}")
-            
-            # Ejemplo: enviar email de confirmación
-            # await enviar_email_confirmacion(adoptante.correo, donacion, mascota)
-            
-    except Exception as e:
-        print(f"Error enviando notificación: {str(e)}")
+        donacion_response = schemas.DonacionResponse(
+            id=donacion.id,
+            adoptante_id=donacion.adoptante_id,
+            mascota_id=donacion.mascota_id,
+            albergue_id=donacion.albergue_id,
+            monto=donacion.monto,
+            mensaje=donacion.mensaje,
+            estado=donacion.estado,
+            mp_preference_id=donacion.mp_preference_id,
+            created_at=donacion.created_at,
+            adoptante_nombre=f"{adoptante.nombre} {adoptante.apellido}" if adoptante else None,
+            mascota_nombre=mascota.nombre if mascota else None
+        )
+        resultado.append(donacion_response)
+    
+    return resultado
 
-# No olvides agregar la importación de func si no la tienes
-from sqlalchemy import func
+@app.get("/donaciones/{donacion_id}/estado", tags=["Donaciones"])
+def verificar_estado_donacion(
+    donacion_id: int,
+    db: Session = Depends(get_db),
+    user = Depends(get_current_user)
+):
+    donacion = db.query(models.Donacion).filter(models.Donacion.id == donacion_id).first()
+    if not donacion:
+        raise HTTPException(status_code=404, detail="Donación no encontrada")
+    
+    # Verificar permisos
+    if user["rol"] == "adoptante" and donacion.adoptante_id != int(user["sub"]):
+        raise HTTPException(status_code=403, detail="No tienes permiso para ver esta donación")
+    elif user["rol"] == "albergue" and donacion.albergue_id != int(user["albergue_id"]):
+        raise HTTPException(status_code=403, detail="No tienes permiso para ver esta donación")
+    
+    return {
+        "id": donacion.id,
+        "estado": donacion.estado,
+        "mp_payment_status": donacion.mp_payment_status,
+        "monto": donacion.monto
+    }

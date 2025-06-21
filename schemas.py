@@ -230,7 +230,62 @@ class MatchCreate(BaseModel):
     mascota_id: int
 
 
-# schemas.py
-class DonacionCreate2(BaseModel):
+# Agregar a schemas.py
+
+from pydantic import BaseModel
+from typing import Optional
+from datetime import datetime
+
+class DonacionCreate(BaseModel):
     mascota_id: int
-    monto: int
+    monto: float
+    mensaje: Optional[str] = None
+
+class DonacionResponse(BaseModel):
+    id: int
+    adoptante_id: int
+    mascota_id: int
+    albergue_id: int
+    monto: float
+    mensaje: Optional[str]
+    estado: str
+    mp_preference_id: Optional[str]
+    created_at: datetime
+    
+    # Información adicional para el frontend
+    adoptante_nombre: Optional[str] = None
+    mascota_nombre: Optional[str] = None
+    albergue_nombre: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+class PreferenceResponse(BaseModel):
+    preference_id: str
+    init_point: str
+    sandbox_init_point: str
+
+class WebhookNotification(BaseModel):
+    action: str
+    api_version: str
+    data: dict
+    date_created: str
+    id: int
+    live_mode: bool
+    type: str
+    user_id: str
+
+class ConfiguracionMPCreate(BaseModel):
+    access_token: str
+    public_key: str
+    webhook_url: Optional[str] = None
+
+class ConfiguracionMPResponse(BaseModel):
+    id: int
+    albergue_id: int
+    public_key: str  # Solo devolvemos la public key por seguridad
+    activo: bool
+    webhook_url: Optional[str]
+
+    class Config:
+        from_attributes = True

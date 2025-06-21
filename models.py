@@ -20,6 +20,7 @@ class Adoptante(Base):
     imagen_perfil = relationship("ImagenPerfil", backref="adoptantes")
 
 
+
 class ImagenPerfil(Base):
     __tablename__ = "imagenes_perfil"
     id = Column(Integer, primary_key=True, index=True)
@@ -137,41 +138,64 @@ class Match(Base):
     fecha = Column(DateTime, default=datetime.utcnow)
 
 
-# models.py
-class Donacion2(Base):
-    __tablename__ = "donaciones2"
-    id = Column(Integer, primary_key=True, index=True)
-    adoptante_id = Column(Integer, ForeignKey("adoptante.id"), nullable=False)
-    mascota_id = Column(Integer, ForeignKey("mascotas.id"), nullable=False)
-    monto = Column(Integer, nullable=False)
-    fecha = Column(DateTime, default=func.now())
-
-    adoptante = relationship("Adoptante")
-    mascota = relationship("Mascota")
 
 
 
-# ------------------------------------------------
-# Modelo SQLAlchemy para Donaciones (agregar a models.py)
-# ------------------------------------------------
+# Agregar a models.py
+
+from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Text, Boolean
+from sqlalchemy.orm import relationship
+from database import Base
+from sqlalchemy.sql import func
+from datetime import datetime
 
 class Donacion(Base):
     __tablename__ = "donaciones"
     
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, index=True)  # ID del adoptante
-    mascota_id = Column(Integer, index=True)  # ID de la mascota
-    amount = Column(Float, nullable=False)
-    preference_id = Column(String(255), unique=True, index=True)
-    payment_id = Column(String(255), nullable=True, index=True)
-    status = Column(String(50), default="pending")  # pending, approved, rejected, cancelled
-    external_reference = Column(String(255), unique=True, index=True)
-    mp_status = Column(String(50), nullable=True)  # Estado específico de MercadoPago
-    mp_status_detail = Column(String(100), nullable=True)
-    transaction_amount = Column(Float, nullable=True)
-    net_received_amount = Column(Float, nullable=True)
-    fee_details = Column(Text, nullable=True)  # JSON con detalles de comisiones
-    payer_email = Column(String(255), nullable=True)
-    payment_method_id = Column(String(100), nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    adoptante_id = Column(Integer, ForeignKey("adoptante.id"), nullable=False)
+    mascota_id = Column(Integer, ForeignKey("mascotas.id"), nullable=False)
+    albergue_id = Column(Integer, ForeignKey("albergue.id"), nullable=False)
+    
+    # Información de la donación
+    monto = Column(Float, nullable=False)
+    mensaje = Column(Text, nullable=True)
+    
+    # Información de Mercado Pago
+    mp_preference_id = Column(String, nullable=True)
+    mp_payment_id = Column(String, nullable=True)
+    mp_payment_status = Column(String, nullable=True)  # pending, approved, rejected, etc.
+    mp_payment_method = Column(String, nullable=True)
+    
+    # Estado de la donación
+    estado = Column(String, default="pendiente")  # pendiente, completada, fallida, cancelada
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    
+    # Relaciones
+    adoptante = relationship("Adoptante", backref="donaciones")
+    mascota = relationship("Mascota", backref="donaciones")
+    albergue = relationship("Albergue", backref="donaciones_recibidas")
+
+
+class ConfiguracionMercadoPago(Base):
+    __tablename__ = "configuracion_mercadopago"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    albergue_id = Column(Integer, ForeignKey("albergue.id"), nullable=False, unique=True)
+    
+    # Credenciales de Mercado Pago
+    access_token = Column(String, nullable=False)
+    public_key = Column(String, nullable=False)
+    
+    # Configuración adicional
+    activo = Column(Boolean, default=True)
+    webhook_url = Column(String, nullable=True)
+    
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    
+    # Relación
+    albergue = relationship("Albergue", backref="configuracion_mp")
