@@ -17,13 +17,13 @@ from schemas import MessageIn, MessageOut, MascotaResponse
 from datetime import datetime
 from models import Mensaje as MensajeModel
 from auth import create_access_token
+from models import Denegacion
 
 router = APIRouter()
 models.Base.metadata.create_all(bind=engine)
 app = FastAPI()
 origins = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
+    "*",
 ]
 
 app.add_middleware(
@@ -479,17 +479,29 @@ def obtener_recomendaciones(
     top_n: int = 0,
     db: Session = Depends(get_db),
 ):
+    # 1) Verificar adoptante
     adoptante = db.query(models.Adoptante).get(adoptante_id)
     if not adoptante:
         raise HTTPException(status_code=404, detail="Adoptante no encontrado")
 
-    etiquetas_dict = parse_etiquetas_dict(adoptante.etiquetas)
-    pesos_dict    = parse_etiquetas_dict(adoptante.pesos)
+    # 2) IDs de mascotas denegadas por este adoptante
+    denegadas = db.query(Denegacion.mascota_id)\
+                  .filter(Denegacion.adoptante_id == adoptante_id)\
+                  .all()
+    denied_ids = {m[0] for m in denegadas}
 
-    mascotas_db = db.query(models.Mascota).all()
+    # 3) Preparar datos de etiquetas y pesos
+    etiquetas_dict = parse_etiquetas_dict(adoptante.etiquetas)
+    pesos_dict     = parse_etiquetas_dict(adoptante.pesos)
+
+    # 4) Traer mascotas que NO han sido denegadas
+    mascotas_db = db.query(models.Mascota)\
+                    .filter(~models.Mascota.id.in_(denied_ids))\
+                    .all()
     if not mascotas_db:
         return []
 
+    # 5) Construir lista para cálculos
     lista_mascotas = []
     for m in mascotas_db:
         try:
@@ -507,23 +519,23 @@ def obtener_recomendaciones(
             "tags": tags,
         })
 
+    # 6) Vectorizar y ponderar
     feature_names, vec_adopt, vecs_masc = construir_matriz_tags(etiquetas_dict, lista_mascotas)
-
     pesos_array = np.ones(len(feature_names), dtype=float)
     for etiqueta, peso in pesos_dict.items():
         if etiqueta in feature_names:
             idx = feature_names.index(etiqueta)
             pesos_array[idx] = float(peso)
-
     vec_adopt_pond = vec_adopt * pesos_array
     vecs_masc_pond = vecs_masc * pesos_array
 
+    # 7) Calcular similitudes y ordenar
     sims = cosine_similarity([vec_adopt_pond], vecs_masc_pond)[0]
-
     for i, mascota in enumerate(lista_mascotas):
         mascota["similitud"] = round(float(sims[i]), 4)
     lista_mascotas.sort(key=lambda x: x["similitud"], reverse=True)
 
+    # 8) Recortar a top_n si lo piden
     if top_n and top_n > 0:
         lista_mascotas = lista_mascotas[:top_n]
 
@@ -850,15 +862,11 @@ def obtener_mascota_por_id(mascota_id: int, db: Session = Depends(get_db)):
 
     return mascota
 
-
-# Asegúrate de tener algo como esto en FastAPI
 @app.get("/matches/albergue/{albergue_id}")
 def listar_matches_albergue(albergue_id: int, db: Session = Depends(get_db)):
     matches = db.query(models.Match).filter(models.Match.id == albergue_id).all()
     return matches
 
-
-# main.py (o donde tengas los endpoints de Adoptante)
 @app.post("/donar", tags=["Donaciones"])
 def donar(donacion: schemas.DonacionCreate, user=Depends(get_current_user), db: Session = Depends(get_db)):
     adoptante_id = int(user["sub"])
@@ -878,3 +886,96 @@ def donar(donacion: schemas.DonacionCreate, user=Depends(get_current_user), db: 
     db.refresh(nueva_donacion)
 
     return {"mensaje": "Donación realizada con éxito"}
+
+# -----------------------------------
+# Endpoints de Adopciones
+# -----------------------------------
+
+@app.post("/matches/{adoptante_id}/{mascota_id}/complete", tags=["Adopciones"])
+def endpoint_completar_match(
+    adoptante_id: int,
+    mascota_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Marcar un match como completado:
+    - Crea un registro en la tabla adopciones
+    - Elimina todos los matches pendientes de esa mascota
+    """
+    try:
+        adop = crud.completar_match(db, adoptante_id, mascota_id)
+    except Exception as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    return {
+        "mensaje": "Adopción confirmada",
+        "adopcion": {
+            "id": adop.id,
+            "adoptante_id": adop.adoptante_id,
+            "mascota_id": adop.mascota_id,
+            "fecha": adop.fecha.isoformat()
+        }
+    }
+
+@app.get("/adopciones/adoptante/{adoptante_id}", tags=["Adopciones"])
+def listar_adopciones_adoptante(
+    adoptante_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Lista todas las adopciones de un adoptante
+    """
+    adopciones = crud.get_adopciones_por_adoptante(db, adoptante_id)
+    return [
+        {
+            "id": a.id,
+            "mascota_id": a.mascota_id,
+            "fecha": a.fecha.isoformat()
+        }
+        for a in adopciones
+    ]
+
+
+# -----------------------------------
+# Endpoints de Denegaciones
+# -----------------------------------
+
+@app.post("/matches/{adoptante_id}/{mascota_id}/deny", tags=["Denegaciones"])
+def endpoint_denegar_match(
+    adoptante_id: int,
+    mascota_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Registra una denegación y borra el match correspondiente
+    """
+    try:
+        neg = crud.denegar_match(db, adoptante_id, mascota_id)
+    except Exception as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    return {
+        "mensaje": "Denegación registrada",
+        "denegacion": {
+            "id": neg.id,
+            "adoptante_id": neg.adoptante_id,
+            "mascota_id": neg.mascota_id,
+            "fecha": neg.fecha.isoformat()
+        }
+    }
+
+@app.get("/denegaciones/adoptante/{adoptante_id}", tags=["Denegaciones"])
+def listar_denegaciones_adoptante(
+    adoptante_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Lista todas las denegaciones hechas por un adoptante
+    """
+    denegaciones = crud.get_denegaciones_por_adoptante(db, adoptante_id)
+    return [
+        {
+            "id": d.id,
+            "mascota_id": d.mascota_id,
+            "fecha": d.fecha.isoformat()
+        }
+        for d in denegaciones
+    ]

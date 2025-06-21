@@ -2,6 +2,7 @@ from sqlalchemy import Column, Integer, String, ForeignKey, Text, DateTime # typ
 from sqlalchemy.orm import relationship # type: ignore
 from database import Base
 from sqlalchemy.sql import func # type: ignore
+from datetime import datetime
 
 
 class Adoptante(Base):
@@ -18,14 +19,17 @@ class Adoptante(Base):
     
     imagen_perfil_id = Column(Integer, ForeignKey("imagenes_perfil.id"), nullable=True)
     imagen_perfil = relationship("ImagenPerfil", backref="adoptantes")
-
+    
+    
+    matches = relationship("Match", back_populates="adoptante", cascade="all, delete-orphan")
+    mascotas = relationship("Mascota",secondary="matches",back_populates="adoptantes")
+    adopciones = relationship("Adopcion", back_populates="adoptante", cascade="all, delete-orphan")
+    denegaciones = relationship("Denegacion", back_populates="adoptante", cascade="all, delete-orphan")
 
 class ImagenPerfil(Base):
     __tablename__ = "imagenes_perfil"
     id = Column(Integer, primary_key=True, index=True)
-    ruta = Column(String, nullable=False)
-
-
+    ruta = Column(String, nullable=False)   
 
 #=====ALBERGUE=======
 class Albergue(Base):
@@ -39,10 +43,7 @@ class Albergue(Base):
 
     mascotas = relationship("Mascota", back_populates="albergue")
 
-
-
 #=====MASCOTA=======
-from sqlalchemy import Text
 
 class Mascota(Base):
     __tablename__ = "mascotas"
@@ -60,6 +61,10 @@ class Mascota(Base):
 
     imagen = relationship("Imagen")
     albergue = relationship("Albergue", back_populates="mascotas")
+    matches    = relationship("Match",    back_populates="mascota", cascade="all, delete-orphan")
+    adoptantes = relationship("Adoptante", secondary="matches", back_populates="mascotas")
+    adopcion   = relationship("Adopcion", back_populates="mascota",uselist=False, cascade="all, delete-orphan")
+    denegaciones = relationship("Denegacion", back_populates="mascota", cascade="all, delete-orphan")
 
 #=====IMAGEN=======
 class Imagen(Base):
@@ -67,11 +72,6 @@ class Imagen(Base):
     id = Column(Integer, primary_key=True, index=True)
     ruta = Column(String, nullable=False)
 
-
-
-from sqlalchemy import Column, Integer, String, DateTime
-from database import Base
-from datetime import datetime
 
 class Mensaje(Base):
     __tablename__ = "mensajes"
@@ -84,14 +84,6 @@ class Mensaje(Base):
     contenido = Column(String, nullable=False)
     timestamp = Column(DateTime, default=datetime.utcnow)
     mascota_id = Column(Integer, ForeignKey("mascotas.id"), nullable=False)
-
-
-
-
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime
-from sqlalchemy.orm import relationship
-from database import Base
-from sqlalchemy.sql import func
 
 # ===== CALENDARIO BASE =====
 class Calendario(Base):
@@ -127,17 +119,16 @@ class CitaEvento(Base):
     # Relaciones
     calendario = relationship("Calendario", backref="evento", uselist=False)
 
-
-
 class Match(Base):
     __tablename__ = "matches"
     id = Column(Integer, primary_key=True, index=True)
-    adoptante_id = Column(Integer, ForeignKey("adoptante.id"))
-    mascota_id = Column(Integer, ForeignKey("mascotas.id"))
+    adoptante_id = Column(Integer, ForeignKey("adoptante.id"), primary_key=True)
+    mascota_id   = Column(Integer, ForeignKey("mascotas.id"),  primary_key=True)
     fecha = Column(DateTime, default=datetime.utcnow)
+    
+    adoptante = relationship("Adoptante", back_populates="matches")
+    mascota   = relationship("Mascota",   back_populates="matches")
 
-
-# models.py
 class Donacion(Base):
     __tablename__ = "donaciones"
     id = Column(Integer, primary_key=True, index=True)
@@ -148,3 +139,24 @@ class Donacion(Base):
 
     adoptante = relationship("Adoptante")
     mascota = relationship("Mascota")
+    
+
+class Adopcion(Base):
+    __tablename__ = "adopciones"
+    id           = Column(Integer, primary_key=True, index=True)
+    adoptante_id = Column(Integer, ForeignKey("adoptante.id"), nullable=False)
+    mascota_id   = Column(Integer, ForeignKey("mascotas.id"),  nullable=False)
+    fecha        = Column(DateTime(timezone=True), server_default=func.now())
+
+    adoptante = relationship("Adoptante", back_populates="adopciones")
+    mascota   = relationship("Mascota",   back_populates="adopcion")
+
+class Denegacion(Base):
+    __tablename__ = "denegaciones"
+    id           = Column(Integer, primary_key=True, index=True)
+    adoptante_id = Column(Integer, ForeignKey("adoptante.id"), nullable=False)
+    mascota_id   = Column(Integer, ForeignKey("mascotas.id"),  nullable=False)
+    fecha        = Column(DateTime(timezone=True), server_default=func.now())
+
+    adoptante = relationship("Adoptante", back_populates="denegaciones")
+    mascota   = relationship("Mascota",   back_populates="denegaciones")

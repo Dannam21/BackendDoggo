@@ -5,7 +5,7 @@ from passlib.hash import bcrypt # type: ignore
 import json
 import pytz # type: ignore
 from datetime import datetime 
-from models import Mascota
+from models import Mascota, Calendario, CitaVisita, CitaEvento, Match, Adopcion, Denegacion
 
 # === ADOPTANTE ===
 def create_adoptante(db: Session, adoptante: schemas.AdoptanteRegister):
@@ -92,15 +92,10 @@ def get_mascotas_por_albergue(db: Session, albergue_id: int):
     return db.query(models.Mascota).filter(models.Mascota.albergue_id == albergue_id).all()
 
 
-
-
-
 # == Match == 
 def obtener_matches(db: Session, usuario_actual_id: int, k=3):
-    # Obtener todos los usuarios que han respondido preguntas
     usuarios = db.query(models.User).all()
 
-    # Filtrar usuarios que tienen respuestas completas
     data = []
     ids = []
     for user in usuarios:
@@ -114,29 +109,18 @@ def obtener_matches(db: Session, usuario_actual_id: int, k=3):
     if usuario_actual_id not in ids:
         raise Exception("El usuario actual no tiene respuestas completas")
 
-    # Convertimos a array
     data = np.array(data)
 
-    # Encontramos el índice del usuario actual
     index_usuario = ids.index(usuario_actual_id)
 
-    # Inicializamos el modelo KNN
     knn = NearestNeighbors(n_neighbors=min(k + 1, len(data)), algorithm='auto')  # +1 porque incluirá el mismo usuario
     knn.fit(data)
 
     distances, indices = knn.kneighbors([data[index_usuario]])
 
-    # Devolvemos los IDs de los usuarios más cercanos (excepto el propio)
     vecinos_ids = [ids[i] for i in indices[0] if ids[i] != usuario_actual_id]
 
     return vecinos_ids
-
-
-
-from sqlalchemy.orm import Session
-from models import Calendario, CitaVisita, CitaEvento
-import schemas
-
 
 def crear_cita_visita(db: Session, data: schemas.CitaVisitaCreate):
     data_dict = data.calendario.dict()
@@ -169,3 +153,66 @@ def crear_cita_evento(db: Session, data: schemas.CitaEventoCreate):
 
 def obtener_citas_por_albergue(db: Session, albergue_id: int):
     return db.query(Calendario).filter(Calendario.albergue_id == albergue_id).all()
+
+def denegar_match(db: Session, adoptante_id: int, mascota_id: int):
+    deleted = db.query(Match).filter_by(
+        adoptante_id=adoptante_id,
+        mascota_id=mascota_id
+    ).delete()
+    db.commit()
+    return deleted  # 0 o 1
+
+def completar_match(db: Session, adoptante_id: int, mascota_id: int):
+    match = db.query(Match).filter_by(
+        adoptante_id=adoptante_id,
+        mascota_id=mascota_id
+    ).first()
+    if not match:
+        raise Exception("Match no encontrado")
+
+    nueva_adop = Adopcion(
+        adoptante_id=adoptante_id,
+        mascota_id=mascota_id
+    )
+    db.add(nueva_adop)
+    db.flush()  
+
+    db.query(Match).filter_by(mascota_id=mascota_id).delete()
+
+    db.commit()
+    db.refresh(nueva_adop)
+    return nueva_adop
+
+
+def get_adopciones_por_adoptante(db: Session, adoptante_id: int):
+    """Lista todas las adopciones de un adoptante."""
+    return db.query(Adopcion).filter(Adopcion.adoptante_id == adoptante_id).all()
+
+def get_adopcion_por_mascota(db: Session, mascota_id: int):
+    """Devuelve la adopción de una mascota (si ya fue adoptada)."""
+    return db.query(Adopcion).filter(Adopcion.mascota_id == mascota_id).first()
+
+
+def denegar_match(db: Session, adoptante_id: int, mascota_id: int):
+    """
+    Registra la denegación y luego borra el match.
+    """
+    # 1) Crear registro de Denegacion
+    neg = Denegacion(
+        adoptante_id=adoptante_id,
+        mascota_id=mascota_id
+    )
+    db.add(neg)
+    # 2) Borrar el match concreto
+    borrados = db.query(Match).filter_by(
+        adoptante_id=adoptante_id,
+        mascota_id=mascota_id
+    ).delete()
+
+    if borrados == 0:
+        db.rollback()
+        raise Exception("No se encontró match para denegar")
+
+    db.commit()
+    db.refresh(neg)
+    return neg

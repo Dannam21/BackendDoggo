@@ -171,7 +171,7 @@ class MessageOut(BaseModel):
     mascota_id: int  # ✅ Para mostrar a qué mascota pertenece el mensaje
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 
@@ -194,7 +194,7 @@ class CalendarioOut(CalendarioBase):
     id: int
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 # Para registrar una cita de visita
@@ -218,7 +218,7 @@ class CalendarioOut(BaseModel):
     adoptante_id: Optional[int] = None  # ← AÑADE ESTA LÍNEA
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 
@@ -234,3 +234,23 @@ class MatchCreate(BaseModel):
 class DonacionCreate(BaseModel):
     mascota_id: int
     monto: int
+    
+class AdopcionOut(BaseModel):
+    id: int
+    adoptante_id: int
+    mascota_id: int
+    fecha: datetime
+
+    class Config:
+        from_attributes = True
+
+
+# === OUTPUT de una Denegación ===
+class DenegacionOut(BaseModel):
+    id: int
+    adoptante_id: int
+    mascota_id: int
+    fecha: datetime
+
+    class Config:
+        from_attributes = True
