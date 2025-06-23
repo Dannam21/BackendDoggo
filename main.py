@@ -13,11 +13,11 @@ from sklearn.metrics.pairwise import cosine_similarity # type: ignore
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, APIRouter, WebSocket # type: ignore
 from models import Adoptante, Albergue, Mascota, Imagen
 from sqlalchemy.orm import Session
-from schemas import MessageIn, MessageOut, MascotaResponse, AdoptanteUpdate
+from schemas import MessageIn, MessageOut, MascotaResponse, AdoptanteUpdate, MatchTotalSimpleOut, MatchTotalCreate
 from datetime import datetime
 from models import Mensaje as MensajeModel
 from auth import create_access_token
-from models import Denegacion
+from models import Denegacion, MatchTotal  
 
 router = APIRouter()
 models.Base.metadata.create_all(bind=engine)
@@ -1142,3 +1142,72 @@ def marcar_como_adoptado(
     db.refresh(mascota)
 
     return {"mensaje": f"La mascota '{mascota.nombre}' fue marcada como adoptada"}
+
+# 1) Todos los totales de un albergue
+@app.post(
+    "/match_totales/",
+    response_model=MatchTotalSimpleOut,
+    tags=["Match Totales"]
+)
+def crear_match_total(
+    data: MatchTotalCreate,
+    db: Session = Depends(get_db)
+):
+    """
+    Crea un registro en la tabla match_totales con los IDs que correspondan.
+    """
+    nuevo = models.MatchTotal(
+        albergue_id=data.albergue_id,
+        adoptante_id=data.adoptante_id,
+        mascota_id=data.mascota_id,
+    )
+    db.add(nuevo)
+    db.commit()
+    db.refresh(nuevo)
+    return nuevo
+
+
+@app.get(
+    "/match_totales/albergue/{albergue_id}",
+    response_model=list[schemas.MatchTotalSimpleOut],
+    tags=["Match Totales"]
+)
+def total_matches_por_albergue(
+    albergue_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Devuelve todos los registros de match_totales para un determinado albergue.
+    """
+    mts = (
+        db.query(models.MatchTotal)
+          .filter(models.MatchTotal.albergue_id == albergue_id)
+          .all()
+    )
+    return mts
+
+# 2) Por adoptante
+@app.get(
+    "/match_totales/adoptante/{adoptante_id}",
+    response_model=list[MatchTotalSimpleOut],
+    tags=["Match Totales"]
+)
+def total_matches_por_adoptante(adoptante_id: int, db: Session = Depends(get_db)):
+    return (
+        db.query(MatchTotal)
+          .filter(MatchTotal.adoptante_id == adoptante_id)
+          .all()
+    )
+
+# 3) Por mascota
+@app.get(
+    "/match_totales/mascota/{mascota_id}",
+    response_model=list[MatchTotalSimpleOut],
+    tags=["Match Totales"]
+)
+def total_matches_por_mascota(mascota_id: int, db: Session = Depends(get_db)):
+    return (
+        db.query(MatchTotal)
+          .filter(MatchTotal.mascota_id == mascota_id)
+          .all()
+    )

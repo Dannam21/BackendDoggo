@@ -130,6 +130,18 @@ class Match(Base):
     adoptante = relationship("Adoptante", back_populates="matches")
     mascota   = relationship("Mascota",   back_populates="matches")
 
+class MatchTotal(Base):
+    __tablename__ = "match_totales"
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    albergue_id   = Column(Integer, ForeignKey("albergue.id"), nullable=True)
+    adoptante_id  = Column(Integer, ForeignKey("adoptante.id"), nullable=True)
+    mascota_id    = Column(Integer, ForeignKey("mascotas.id"), nullable=True)
+    fecha         = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    
+    albergue  = relationship("Albergue", backref="match_totales")
+    adoptante = relationship("Adoptante", backref="match_totales")
+    mascota   = relationship("Mascota", backref="match_totales")
+
 class Donacion(Base):
     __tablename__ = "donaciones"
     id = Column(Integer, primary_key=True, index=True)

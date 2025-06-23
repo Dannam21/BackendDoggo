@@ -261,3 +261,18 @@ class DenegacionOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+class MatchTotalCreate(BaseModel):
+    albergue_id: int | None
+    adoptante_id: int | None
+    mascota_id: int | None
+
+class MatchTotalSimpleOut(BaseModel):
+    id: int
+    albergue_id: int | None
+    adoptante_id: int | None
+    mascota_id: int | None
+    fecha: datetime
+
+    class Config:
+        orm_mode = True
