@@ -193,15 +193,15 @@ class CalendarioBase(BaseModel):
     asunto: str
     lugar: str
     albergue_id: int
+    adoptante_id: Optional[int] = None
 
 
 # Para retornar una cita del calendario
 class CalendarioOut(CalendarioBase):
-    id: int
+   id: int
 
-    class Config:
+class Config:
         from_attributes = True
-
 
 # Para registrar una cita de visita
 class CitaVisitaCreate(BaseModel):

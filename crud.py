@@ -3,6 +3,8 @@ import models
 import schemas
 from passlib.hash import bcrypt # type: ignore
 import json
+from pytz import timezone
+
 import pytz # type: ignore
 from datetime import datetime 
 from models import Mascota, Calendario, CitaVisita, CitaEvento, Match, Adopcion, Denegacion
@@ -123,9 +125,20 @@ def obtener_matches(db: Session, usuario_actual_id: int, k=3):
     return vecinos_ids
 
 def crear_cita_visita(db: Session, data: schemas.CitaVisitaCreate):
+    lima = timezone("America/Lima")
     data_dict = data.calendario.dict()
     data_dict["tipo"] = "visita"
-    data_dict["adoptante_id"] = data.adoptante_id  # ✅ agrega esto
+
+    #  Verificación de datos recibidos
+    print("Verificacion:", data)
+    print("DATA BRUTA:", data)
+    print("calendario:", data_dict)
+    print("adoptante_id:", data.adoptante_id)
+
+    data_dict["adoptante_id"] = data.adoptante_id  
+
+    if data_dict["fecha_hora"].tzinfo is None:
+        data_dict["fecha_hora"] = lima.localize(data_dict["fecha_hora"])
 
     cita = Calendario(**data_dict)
     db.add(cita)
@@ -136,6 +149,9 @@ def crear_cita_visita(db: Session, data: schemas.CitaVisitaCreate):
     db.commit()
     db.refresh(cita)
     return cita
+
+
+
 
 
 
