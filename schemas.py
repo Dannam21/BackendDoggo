@@ -263,15 +263,15 @@ class DenegacionOut(BaseModel):
         from_attributes = True
 
 class MatchTotalCreate(BaseModel):
-    albergue_id: int | None
-    adoptante_id: int | None
-    mascota_id: int | None
+    albergue_id: Optional[int]
+    adoptante_id: Optional[int]
+    mascota_id: Optional[int]
 
 class MatchTotalSimpleOut(BaseModel):
     id: int
-    albergue_id: int | None
-    adoptante_id: int | None
-    mascota_id: int | None
+    albergue_id: Optional[int]
+    adoptante_id: Optional[int]
+    mascota_id: Optional[int]
     fecha: datetime
 
     class Config:
