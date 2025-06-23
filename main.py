@@ -1117,3 +1117,28 @@ def listar_denegaciones_adoptante(
         }
         for d in denegaciones
     ]
+
+
+
+@app.patch("/mascotas/{mascota_id}/adoptar", tags=["Mascotas"])
+def marcar_como_adoptado(
+    mascota_id: int,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user)
+):
+    # Solo albergues pueden hacer esto
+    if user["rol"] != "albergue":
+        raise HTTPException(status_code=403, detail="Solo albergues pueden cambiar el estado")
+
+    mascota = db.query(models.Mascota).filter(models.Mascota.id == mascota_id).first()
+    if not mascota:
+        raise HTTPException(status_code=404, detail="Mascota no encontrada")
+
+    if mascota.albergue_id != int(user["albergue_id"]):
+        raise HTTPException(status_code=403, detail="No puedes modificar mascotas de otro albergue")
+
+    mascota.estado = "Adoptado"
+    db.commit()
+    db.refresh(mascota)
+
+    return {"mensaje": f"La mascota '{mascota.nombre}' fue marcada como adoptada"}
