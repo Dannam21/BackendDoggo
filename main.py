@@ -786,7 +786,7 @@ async def websocket_chat(
     await websocket.accept()
 
     key = get_user_key(emisor_id, emisor_tipo)
-    active_connections[key] = websocket
+    active_connections[key] = websocket  # ✅ Registramos la conexión
 
     try:
         while True:
@@ -816,19 +816,26 @@ async def websocket_chat(
                 "receptor_tipo": msg_in.receptor_tipo,
                 "contenido": msg_in.contenido,
                 "timestamp": mensaje_db.timestamp.isoformat(),
-                "mascota_id": msg_in.mascota_id  # ✅ también puedes incluirlo en la respuesta
+                "mascota_id": msg_in.mascota_id
             }
 
             # Enviar al receptor si está conectado
             receptor_key = get_user_key(msg_in.receptor_id, msg_in.receptor_tipo)
-            if receptor_key in active_connections:
-                await active_connections[receptor_key].send_json(message_out)
+            receptor_ws = active_connections.get(receptor_key)
+            if receptor_ws:
+                await receptor_ws.send_json(message_out)
 
             # También al emisor (echo)
             await websocket.send_json(message_out)
 
     except WebSocketDisconnect:
-        del active_connections[key]
+        print(f"🔌 WebSocket desconectado: {key}")
+        active_connections.pop(key, None)  # ✅ Eliminación segura
+
+    except Exception as e:
+        print(f"⚠️ Error inesperado en WebSocket ({key}): {e}")
+        active_connections.pop(key, None)  # ✅ Asegura que la conexión se remueva si falla
+
 
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -853,6 +860,9 @@ def crear_evento(data: schemas.CitaEventoCreate, db: Session = Depends(get_db)):
 def listar_citas_albergue(albergue_id: int, db: Session = Depends(get_db)):
     return crud.obtener_citas_por_albergue(db, albergue_id)
 
+
+
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from database import get_db
@@ -860,20 +870,26 @@ from models import Calendario
 from schemas import CalendarioOut
 from datetime import datetime, timedelta
 
+from datetime import datetime, time, date
+from typing import Optional
+import pytz  # Asegúrate de tenerlo importado
+
 @app.get("/calendario/dia/{fecha}", response_model=list[CalendarioOut])
-def obtener_citas_por_fecha(fecha: str, db: Session = Depends(get_db)):
-    try:
-        fecha_inicio = datetime.strptime(fecha, "%Y-%m-%d")
-        fecha_fin = fecha_inicio + timedelta(days=1)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Formato de fecha inválido (esperado: YYYY-MM-DD)")
+def obtener_citas_por_fecha(
+    fecha: date,
+    adoptante_id: Optional[int] = None,
+    db: Session = Depends(get_db)
+):
+    lima = pytz.timezone("America/Lima")
+    inicio = lima.localize(datetime.combine(fecha, time.min)).astimezone(pytz.utc)
+    fin = lima.localize(datetime.combine(fecha, time.max)).astimezone(pytz.utc)
 
-    citas = db.query(Calendario).filter(
-        Calendario.fecha_hora >= fecha_inicio,
-        Calendario.fecha_hora < fecha_fin
-    ).all()
+    query = db.query(Calendario).filter(Calendario.fecha_hora.between(inicio, fin))
 
-    return citas
+    if adoptante_id is not None:
+        query = query.filter(Calendario.adoptante_id == adoptante_id)
+
+    return query.all()
 
 
 from schemas import MatchCreate
