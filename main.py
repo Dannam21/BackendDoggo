@@ -256,6 +256,7 @@ def obtener_mascotas_por_albergue(
                 imagen_id=m.imagen_id,
                 etiquetas=lista_etqs,
                 vacunas=lista_vacunas,
+                estado= m.estado,
                 created_at=created_at_str,
             )
         )
@@ -302,6 +303,7 @@ def crear_mascota(
         imagen_id=nueva.imagen_id,
         etiquetas=lista_etqs,
         vacunas=lista_vacunas,
+        estado= nueva.estado,
         created_at=nueva.created_at.isoformat(),
     )
 
@@ -338,12 +340,13 @@ def editar_mascota(
         nombre=db_mascota.nombre,
         edad=db_mascota.edad,
         genero=db_mascota.genero,
+        estado=db_mascota.estado,
         especie=db_mascota.especie,
         descripcion=db_mascota.descripcion,
         albergue_id=db_mascota.albergue_id,
         imagen_id=db_mascota.imagen_id,
         etiquetas=json.loads(db_mascota.etiquetas) if db_mascota.etiquetas else [],
-        vacunas=json.loads(db_mascota.vacunas) if db_mascota.vacunas else [],  # 👈 agregado aquí
+        vacunas=json.loads(db_mascota.vacunas) if db_mascota.vacunas else [],
         created_at=db_mascota.created_at.isoformat(),
     )
 
@@ -381,6 +384,7 @@ def listar_todas_las_mascotas(db: Session = Depends(get_db)):
                 imagen_id=m.imagen_id,
                 etiquetas=lista_etqs,
                 vacunas=lista_vacunas,
+                estado= m.estado,
                 created_at=created_at_str,
             )
         )
@@ -422,6 +426,7 @@ def obtener_mascota(
         etiquetas=etiquetas,
         created_at=created_at_str,
         genero=m.genero,
+        estado= m.estado,
         vacunas=json.loads(m.vacunas) if m.vacunas else [],
     )
 

@@ -74,6 +74,7 @@ def create_mascota(db: Session, mascota: schemas.MascotaCreate, albergue_id: int
         imagen_id=mascota.imagen_id,
         etiquetas=json.dumps(mascota.etiquetas),
         vacunas=json.dumps(mascota.vacunas),  # 👈 Agregado aquí
+        estado=mascota.estado or "En adopción",
         albergue_id=albergue_id,
         created_at=ahora_lima, 
     )

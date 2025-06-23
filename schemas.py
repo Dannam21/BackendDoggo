@@ -94,8 +94,8 @@ class MascotaCreate(BaseModel):
     imagen_id: int
     etiquetas: List[str]
     genero: str
-    vacunas: List[str] = []  # NUEVO CAMPO
-
+    vacunas: List[str] = []  
+    estado: str = "En adopción"
 
 class MascotaResponse(BaseModel):
     id: int
@@ -109,6 +109,7 @@ class MascotaResponse(BaseModel):
     vacunas: List[str]
     created_at: str
     genero: Optional[str]
+    estado: Optional[str]
 
     class Config:
         from_attributes = True
