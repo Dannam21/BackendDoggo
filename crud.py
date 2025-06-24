@@ -3,11 +3,15 @@ import models
 import schemas
 from passlib.hash import bcrypt # type: ignore
 import json
-from pytz import timezone
+from pytz import timezone # type: ignore
 
 import pytz # type: ignore
 from datetime import datetime 
 from models import Mascota, Calendario, CitaVisita, CitaEvento, Match, Adopcion, Denegacion
+
+lima = timezone("America/Lima")
+hora_peru = datetime.now(lima)
+
 
 # === ADOPTANTE ===
 def create_adoptante(db: Session, adoptante: schemas.AdoptanteRegister):
@@ -37,6 +41,7 @@ def create_albergue(db: Session, albergue: schemas.AlbergueRegister):
         correo=albergue.correo,
         contrasena=hashed_pw,
         telefono=albergue.telefono,
+        ubicacion=albergue.ubicacion 
     )
     db.add(db_albergue)
     db.commit()
@@ -64,9 +69,6 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 
 def create_mascota(db: Session, mascota: schemas.MascotaCreate, albergue_id: int):
-    lima_tz = pytz.timezone("America/Lima")
-    ahora_lima = datetime.now(lima_tz)
-
     nueva = models.Mascota(
         nombre=mascota.nombre,
         edad=mascota.edad,
@@ -78,7 +80,7 @@ def create_mascota(db: Session, mascota: schemas.MascotaCreate, albergue_id: int
         vacunas=json.dumps(mascota.vacunas),  # 👈 Agregado aquí
         estado=mascota.estado or "En adopción",
         albergue_id=albergue_id,
-        created_at=ahora_lima, 
+        created_at=hora_peru, 
     )
     db.add(nueva)
     db.commit()
@@ -93,37 +95,6 @@ def get_all_mascotas(db: Session):
 
 def get_mascotas_por_albergue(db: Session, albergue_id: int):
     return db.query(models.Mascota).filter(models.Mascota.albergue_id == albergue_id).all()
-
-
-# == Match == 
-def obtener_matches(db: Session, usuario_actual_id: int, k=3):
-    usuarios = db.query(models.User).all()
-
-    data = []
-    ids = []
-    for user in usuarios:
-        respuestas = db.query(models.Respuesta).filter_by(user_id=user.id).order_by(models.Respuesta.pregunta_id).all()
-        if respuestas:
-            vector = [r.valor for r in respuestas]
-            if len(vector) == len(db.query(models.Pregunta).all()):
-                data.append(vector)
-                ids.append(user.id)
-
-    if usuario_actual_id not in ids:
-        raise Exception("El usuario actual no tiene respuestas completas")
-
-    data = np.array(data)
-
-    index_usuario = ids.index(usuario_actual_id)
-
-    knn = NearestNeighbors(n_neighbors=min(k + 1, len(data)), algorithm='auto')  # +1 porque incluirá el mismo usuario
-    knn.fit(data)
-
-    distances, indices = knn.kneighbors([data[index_usuario]])
-
-    vecinos_ids = [ids[i] for i in indices[0] if ids[i] != usuario_actual_id]
-
-    return vecinos_ids
 
 def crear_cita_visita(db: Session, data: schemas.CitaVisitaCreate):
     lima = timezone("America/Lima")

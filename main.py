@@ -1,23 +1,23 @@
 import shutil, os, json
 import numpy as np # type: ignore
-from typing import List, Dict, Any, Tuple
-from datetime import datetime
+from typing import List, Dict, Any, Tuple, Optional
+from datetime import datetime, timedelta, time, date
 import models, schemas, crud, auth
-from sqlalchemy.orm import Session # type: ignore
+from sqlalchemy.orm import Session,joinedload # type: ignore
 from database import SessionLocal, engine
 from fastapi.responses import FileResponse # type: ignore
 from fastapi.security import OAuth2PasswordBearer # type: ignore
 from fastapi.middleware.cors import CORSMiddleware # type: ignore
 from sklearn.preprocessing import MultiLabelBinarizer # type: ignore
 from sklearn.metrics.pairwise import cosine_similarity # type: ignore
-from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, APIRouter, WebSocket # type: ignore
-from models import Adoptante, Albergue, Mascota, Imagen
-from sqlalchemy.orm import Session
-from schemas import MessageIn, MessageOut, MascotaResponse, AdoptanteUpdate, MatchTotalSimpleOut, MatchTotalCreate
-from datetime import datetime
+from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, APIRouter, WebSocket, WebSocketDisconnect, Query # type: ignore
+from models import Adoptante, Albergue, Mascota, Imagen, Denegacion, MatchTotal, Calendario  
+from schemas import MessageIn, MessageOut, MascotaResponse, AdoptanteUpdate, MatchTotalSimpleOut, MatchTotalCreate, CalendarioOut, MatchCreate
 from models import Mensaje as MensajeModel
 from auth import create_access_token
-from models import Denegacion, MatchTotal  
+from models import Mensaje
+from database import get_db
+import pytz #type: ignore
 
 router = APIRouter()
 models.Base.metadata.create_all(bind=engine)
@@ -634,9 +634,6 @@ def obtener_conversacion(id1: int, tipo1: str, id2: int, tipo2: str, db: Session
     ).order_by(MensajeModel.timestamp).all()
     return mensajes
 
-
-from typing import Optional
-
 @app.get("/mensajes3/conversacion", response_model=List[MessageOut], tags=["Mensajes"])
 def obtener_conversacion(
     id1: int,
@@ -665,7 +662,6 @@ def obtener_conversacion(
 
 
 
-from fastapi import WebSocket
 
 @app.websocket("/ws/chat/{user_id}")
 async def chat(websocket: WebSocket, user_id: int):
@@ -675,7 +671,6 @@ async def chat(websocket: WebSocket, user_id: int):
         # Aquí podrías procesar el mensaje, guardarlo y reenviarlo a otros sockets conectados
         await websocket.send_text(f"Mensaje recibido de {user_id}: {data}")
 
-from sqlalchemy.orm import joinedload
 
 @app.get("/albergue/{albergue_id}", response_model=schemas.AlbergueOut, summary="Obtener albergue por ID")
 def get_albergue_by_id(albergue_id: int, db: Session = Depends(get_db)):
@@ -683,12 +678,6 @@ def get_albergue_by_id(albergue_id: int, db: Session = Depends(get_db)):
     if not albergue:
         raise HTTPException(status_code=404, detail="Albergue no encontrado")
     return albergue
-
-from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
-from models import Mensaje, Adoptante, Albergue
-from database import get_db
-
 
 @app.get("/mensajes/contactos", tags=["Mensajes"])
 def obtener_contactos_conversados(emisor_id: int, emisor_tipo: str, db: Session = Depends(get_db)):
@@ -762,15 +751,6 @@ def obtener_contactos_conversados(emisor_id: int, emisor_tipo: str, db: Session 
 
     return resultado
 
-
-# chat_ws.py
-from fastapi import WebSocket, WebSocketDisconnect, Depends, APIRouter, Query
-from sqlalchemy.orm import Session
-from database import get_db
-from models import Mensaje
-from schemas import MessageIn, MessageOut
-from datetime import datetime
-
 active_connections = {}
 
 def get_user_key(user_id: int, user_type: str):
@@ -837,12 +817,6 @@ async def websocket_chat(
         active_connections.pop(key, None)  # ✅ Asegura que la conexión se remueva si falla
 
 
-
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
-from database import get_db
-import schemas, crud
-
 router = APIRouter(prefix="/calendario", tags=["Calendario"])
 
 
@@ -860,19 +834,6 @@ def crear_evento(data: schemas.CitaEventoCreate, db: Session = Depends(get_db)):
 def listar_citas_albergue(albergue_id: int, db: Session = Depends(get_db)):
     return crud.obtener_citas_por_albergue(db, albergue_id)
 
-
-
-
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
-from database import get_db
-from models import Calendario
-from schemas import CalendarioOut
-from datetime import datetime, timedelta
-
-from datetime import datetime, time, date
-from typing import Optional
-import pytz  # Asegúrate de tenerlo importado
 
 @app.get("/calendario/dia/{fecha}", response_model=list[CalendarioOut])
 def obtener_citas_por_fecha(
@@ -892,7 +853,6 @@ def obtener_citas_por_fecha(
     return query.all()
 
 
-from schemas import MatchCreate
 
 @app.post("/matches/")
 def crear_match(match: MatchCreate, db: Session = Depends(get_db)):

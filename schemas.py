@@ -1,6 +1,7 @@
 from pydantic import BaseModel, EmailStr # type: ignore
-from typing import Optional, List, Dict, Union
+from typing import Optional, List, Dict, Union, Literal
 import json
+from datetime import datetime
 
 # === REGISTRO DE USUARIOS ===
 class AdoptanteRegister(BaseModel):
@@ -21,7 +22,7 @@ class AlbergueRegister(BaseModel):
     correo: str
     contrasena: str
     telefono: Optional[str] = None
-    pesos: Dict[str, float] = {}
+    ubicacion: str = None
 
 # === LOGIN ===
 class AdoptanteLogin(BaseModel):
@@ -130,6 +131,7 @@ class AlbergueOut(BaseModel):
     nombre: str
     telefono: str
     correo: str
+    ubicacion: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -140,11 +142,7 @@ class AlbergueCreate(BaseModel):
     correo: str
     contrasena: str
     telefono: Optional[str] = None
-
-
-from pydantic import BaseModel
-from typing import Literal
-from datetime import datetime
+    ubicacion: Optional[str] = None
 
 class Message(BaseModel):
     emisor_id: int
@@ -155,18 +153,11 @@ class Message(BaseModel):
     timestamp: datetime
     mascota_id: int  # ✅ Se añade el ID de la mascota
 
-from pydantic import BaseModel
-
 class MessageIn(BaseModel):
     receptor_id: int
     receptor_tipo: str
     contenido: str
     mascota_id: int  # ✅ Requerido al enviar un mensaje
-
-# schemas.py
-
-from pydantic import BaseModel
-from datetime import datetime
 
 class MessageOut(BaseModel):
     emisor_id: int
@@ -179,14 +170,6 @@ class MessageOut(BaseModel):
 
     class Config:
         from_attributes = True
-
-
-
-
-from pydantic import BaseModel
-from datetime import datetime
-from typing import Optional
-
 
 # Base para crear una cita en calendario
 class CalendarioBase(BaseModel):
@@ -226,11 +209,6 @@ class CalendarioOut(BaseModel):
 
     class Config:
         from_attributes = True
-
-
-
-
-from pydantic import BaseModel
 
 class MatchCreate(BaseModel):
     adoptante_id: int
@@ -275,4 +253,4 @@ class MatchTotalSimpleOut(BaseModel):
     fecha: datetime
 
     class Config:
-        orm_mode = True
+        from_attributes = True

@@ -40,7 +40,8 @@ class Albergue(Base):
     correo = Column(String, unique=True, index=True, nullable=False)
     telefono = Column(String, nullable=True)
     contrasena = Column(String, nullable=False)
-
+    ubicacion = Column(String, nullable=True)
+    
     mascotas = relationship("Mascota", back_populates="albergue")
 
 #=====MASCOTA=======
