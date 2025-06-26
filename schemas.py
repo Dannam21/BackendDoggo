@@ -22,6 +22,10 @@ class AlbergueRegister(BaseModel):
     contrasena: str
     telefono: Optional[str] = None
     pesos: Dict[str, float] = {}
+    direccion: Optional[str] = None
+    latitud: Optional[str] = None
+    longitud: Optional[str] = None
+
 
 # === LOGIN ===
 class AdoptanteLogin(BaseModel):
@@ -130,6 +134,10 @@ class AlbergueOut(BaseModel):
     nombre: str
     telefono: str
     correo: str
+    direccion: Optional[str]
+    latitud: Optional[str]
+    longitud: Optional[str]
+
 
     class Config:
         from_attributes = True
@@ -140,6 +148,9 @@ class AlbergueCreate(BaseModel):
     correo: str
     contrasena: str
     telefono: Optional[str] = None
+    direccion: Optional[str] = None  # ✔️ esto debe estar así
+    latitud: Optional[str] = None    # ✔️
+    longitud: Optional[str] = None   # ✔️
 
 
 from pydantic import BaseModel

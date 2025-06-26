@@ -37,6 +37,9 @@ def create_albergue(db: Session, albergue: schemas.AlbergueRegister):
         correo=albergue.correo,
         contrasena=hashed_pw,
         telefono=albergue.telefono,
+        direccion=albergue.direccion,
+        latitud=albergue.latitud,
+        longitud=albergue.longitud,
     )
     db.add(db_albergue)
     db.commit()
