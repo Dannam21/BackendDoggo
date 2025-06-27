@@ -522,6 +522,8 @@ def construir_matriz_tags(
 
     return mlb.classes_.tolist(), vector_adoptante, vectores_mascotas
 
+
+
 @app.get("/recomendaciones/{adoptante_id}", tags=["Recomendaciones"])
 def obtener_recomendaciones(
     adoptante_id: int,

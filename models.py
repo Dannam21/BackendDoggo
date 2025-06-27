@@ -15,8 +15,11 @@ class Adoptante(Base):
     telefono = Column(String, nullable=True)
     contrasena = Column(String, nullable=False)
     etiquetas = Column(Text, nullable=True)
-    pesos           = Column(Text, nullable=True)
-    
+    pesos    = Column(Text, nullable=True)
+    direccion = Column(String, nullable=True)
+    latitud = Column(String, nullable=True)
+    longitud = Column(String, nullable=True)
+
     imagen_perfil_id = Column(Integer, ForeignKey("imagenes_perfil.id"), nullable=True)
     imagen_perfil = relationship("ImagenPerfil", backref="adoptantes")
     

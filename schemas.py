@@ -13,6 +13,9 @@ class AdoptanteRegister(BaseModel):
     imagen_perfil_id: Optional[int] = None
     telefono: Optional[str] = None
     pesos: Dict[str, float] = {}
+    direccion: Optional[str] = None
+    latitud: Optional[str] = None
+    longitud: Optional[str] = None
 
 
 class AlbergueRegister(BaseModel):
@@ -46,7 +49,10 @@ class AdoptanteOut(BaseModel):
     telefono: Optional[str]
     etiquetas: Dict[str, Union[str, List[str]]]
     imagen_perfil_id: int
-    pesos: Dict[str, float] 
+    pesos: Dict[str, float]
+    direccion: Optional[str] = None
+    latitud: Optional[str] = None
+    longitud: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -72,6 +78,9 @@ class AdoptanteOut(BaseModel):
             etiquetas=etiquetas,
             imagen_perfil_id=adoptante_obj.imagen_perfil_id,
             pesos=pesos,
+            direccion=adoptante_obj.direccion,
+            latitud= adoptante_obj.latitud,
+            longitud=adoptante_obj.longitud
         )
 
 class AdoptanteCreate(BaseModel):
@@ -82,6 +91,9 @@ class AdoptanteCreate(BaseModel):
     contrasena: str
     telefono: Optional[str] = None
     imagen_perfil_id: int
+    direccion: Optional[str] = None  
+    latitud: Optional[str] = None    
+    longitud: Optional[str] = None  
     
 class AdoptanteUpdate(BaseModel):
     nombre: Optional[str]

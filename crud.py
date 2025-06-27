@@ -21,7 +21,10 @@ def create_adoptante(db: Session, adoptante: schemas.AdoptanteRegister):
         contrasena=hashed_pw,
         etiquetas=json.dumps(adoptante.etiquetas or {}),
         imagen_perfil_id=adoptante.imagen_perfil_id,
-        pesos=json.dumps(adoptante.pesos or {})   # ← guardamos JSON
+        pesos=json.dumps(adoptante.pesos or {}),
+        direccion=adoptante.direccion,
+        latitud=adoptante.latitud,
+        longitud=adoptante.longitud,
     )
     db.add(db_adoptante)
     db.commit()
@@ -81,7 +84,7 @@ def create_mascota(db: Session, mascota: schemas.MascotaCreate, albergue_id: int
         vacunas=json.dumps(mascota.vacunas),  # 👈 Agregado aquí
         estado=mascota.estado or "En adopción",
         albergue_id=albergue_id,
-        created_at=ahora_lima, 
+        created_at=ahora_lima,
     )
     db.add(nueva)
     db.commit()
