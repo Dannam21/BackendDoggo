@@ -47,6 +47,8 @@ class AdoptanteOut(BaseModel):
     etiquetas: Dict[str, Union[str, List[str]]]
     imagen_perfil_id: int
     pesos: Dict[str, float] 
+    #NUEVO
+    qr_imagen_id: Optional[int] = None 
 
     class Config:
         from_attributes = True
@@ -88,11 +90,13 @@ class AdoptanteUpdate(BaseModel):
     apellido: Optional[str]
     correo: Optional[EmailStr]
     telefono: Optional[str]
+    qr_imagen_id: Optional[int] = None
 
 #=====MASCOTA=======
 class MascotaCreate(BaseModel):
     nombre: str
-    edad: int
+    edad_valor: Optional[int] = None
+    edad_unidad: Optional[str] = None
     especie: str
     descripcion: Optional[str]
     imagen_id: int
@@ -104,7 +108,8 @@ class MascotaCreate(BaseModel):
 class MascotaResponse(BaseModel):
     id: int
     nombre: str
-    edad: int
+    edad_valor: Optional[int] = 0
+    edad_unidad: Optional[str] = "meses"
     especie: str
     descripcion: Optional[str]
     albergue_id: int
@@ -115,13 +120,15 @@ class MascotaResponse(BaseModel):
     genero: Optional[str]
     estado: Optional[str]
 
+
     class Config:
         from_attributes = True
 
 
 class MascotaUpdate(BaseModel):
     nombre: Optional[str] = None
-    edad: Optional[int] = None
+    edad_valor: Optional[int] = None
+    edad_unidad: Optional[str] = None
     especie: Optional[str] = None
     descripcion: Optional[str] = None
     etiquetas: List[str] = []
@@ -135,8 +142,13 @@ class AlbergueOut(BaseModel):
     telefono: str
     correo: str
     direccion: Optional[str]
-    latitud: Optional[str]
-    longitud: Optional[str]
+    #CAMBIE
+    #latitud: Optional[str]
+    #longitud: Optional[str]
+    latitud: Optional[float]
+    longitud: Optional[float]
+    qr_imagen_id: int | None = None 
+
 
 
     class Config:
@@ -151,6 +163,7 @@ class AlbergueCreate(BaseModel):
     direccion: Optional[str] = None  # ✔️ esto debe estar así
     latitud: Optional[str] = None    # ✔️
     longitud: Optional[str] = None   # ✔️
+    
 
 
 from pydantic import BaseModel

@@ -43,8 +43,13 @@ class Albergue(Base):
     direccion = Column(String, nullable=True)
     latitud = Column(String, nullable=True)
     longitud = Column(String, nullable=True)
+    #=====NUEVO=======
+    qr_imagen_id = Column(Integer, ForeignKey("imagenes.id"), nullable=True)
+
 
     mascotas = relationship("Mascota", back_populates="albergue")
+    qr_imagen = relationship("Imagen", foreign_keys=[qr_imagen_id])
+
 
 #=====MASCOTA=======
 
@@ -53,7 +58,8 @@ class Mascota(Base):
     id = Column(Integer, primary_key=True, index=True)
     nombre = Column(String, index=True)
     especie = Column(String)
-    edad = Column(Integer)
+    edad_valor = Column(Integer, nullable=True)  
+    edad_unidad = Column(String(10), nullable=True)  
     descripcion = Column(String, nullable=True)
     albergue_id = Column(Integer, ForeignKey("albergue.id"))
     imagen_id = Column(Integer, ForeignKey("imagenes.id"))

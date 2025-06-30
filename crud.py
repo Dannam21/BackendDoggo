@@ -72,7 +72,8 @@ def create_mascota(db: Session, mascota: schemas.MascotaCreate, albergue_id: int
 
     nueva = models.Mascota(
         nombre=mascota.nombre,
-        edad=mascota.edad,
+        edad_valor=mascota.edad_valor or 0,  # 👈 default 0
+        edad_unidad=mascota.edad_unidad or "meses",  # 👈 default "meses"
         especie=mascota.especie,
         genero=mascota.genero,  
         descripcion=mascota.descripcion,

@@ -21,10 +21,15 @@ from models import Denegacion, MatchTotal
 
 router = APIRouter()
 models.Base.metadata.create_all(bind=engine)
+
 app = FastAPI()
+#origins = [
+#    "*",
+#]
 origins = [
-    "*",
+    "http://localhost:5173"
 ]
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -45,9 +50,12 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 def get_current_user(token: str = Depends(oauth2_scheme)):
     payload = auth.verify_token(token)
+    print("⚡ TOKEN RECIBIDO:", token)
     if not payload:
         raise HTTPException(status_code=401, detail="Token inválido")
     return payload
+
+
 
 # ------------------------------------------------
 # Sección: Root
@@ -248,7 +256,8 @@ def obtener_mascotas_por_albergue(
             schemas.MascotaResponse(
                 id=m.id,
                 nombre=m.nombre,
-                edad=m.edad,
+                edad_valor=m.edad_valor,
+                edad_unidad=m.edad_unidad,
                 especie=m.especie,
                 genero=m.genero,
                 descripcion=m.descripcion,
@@ -295,7 +304,8 @@ def crear_mascota(
     return schemas.MascotaResponse(
         id=nueva.id,
         nombre=nueva.nombre,
-        edad=nueva.edad,
+        edad_valor=nueva.edad_valor,
+        edad_unidad=nueva.edad_unidad,
         genero=nueva.genero,
         especie=nueva.especie,
         descripcion=nueva.descripcion,
@@ -326,7 +336,8 @@ def editar_mascota(
 
     # Actualizamos campos (si vienen en la solicitud)
     db_mascota.nombre = mascota.nombre if mascota.nombre else db_mascota.nombre
-    db_mascota.edad = mascota.edad if mascota.edad else db_mascota.edad
+    db_mascota.edad_valor = mascota.edad_valor if mascota.edad_valor is not None else db_mascota.edad_valor
+    db_mascota.edad_unidad = mascota.edad_unidad if mascota.edad_unidad is not None else db_mascota.edad_unidad
     db_mascota.especie = mascota.especie if mascota.especie else db_mascota.especie
     db_mascota.descripcion = mascota.descripcion if mascota.descripcion else db_mascota.descripcion
     db_mascota.etiquetas = json.dumps(mascota.etiquetas) if mascota.etiquetas else db_mascota.etiquetas
@@ -376,7 +387,8 @@ def listar_todas_las_mascotas(db: Session = Depends(get_db)):
             schemas.MascotaResponse(
                 id=m.id,
                 nombre=m.nombre,
-                edad=m.edad,
+                edad_valor=m.edad_valor,
+                edad_unidad=m.edad_unidad,
                 especie=m.especie,
                 genero=m.genero,
                 descripcion=m.descripcion,
@@ -418,7 +430,8 @@ def obtener_mascota(
     return schemas.MascotaResponse(
         id=m.id,
         nombre=m.nombre,
-        edad=m.edad,
+        edad_valor=m.edad_valor,
+        edad_unidad=m.edad_unidad,
         especie=m.especie,
         descripcion=m.descripcion,
         albergue_id=m.albergue_id,
@@ -561,7 +574,8 @@ def obtener_recomendaciones(
             "id": m.id,
             "nombre": m.nombre,
             "especie": m.especie,
-            "edad": m.edad,
+            "edad_valor": m.edad_valor,
+            "edad_unidad": m.edad_unidad,
             "descripcion": m.descripcion,
             "albergue_id": m.albergue_id,
             "imagen_id": m.imagen_id,
@@ -1227,3 +1241,29 @@ def total_matches_por_mascota(mascota_id: int, db: Session = Depends(get_db)):
           .filter(MatchTotal.mascota_id == mascota_id)
           .all()
     )
+
+####### QR
+from fastapi import Body
+
+@app.put("/albergue/{albergue_id}", tags=["Albergue"])
+def actualizar_albergue(
+    albergue_id: int,
+    data: dict = Body(...),
+    db: Session = Depends(get_db),
+    user = Depends(get_current_user)
+):
+    # ✅ Corrección aquí
+    if user["rol"] != "albergue" or int(user["albergue_id"]) != int(albergue_id):
+        raise HTTPException(status_code=403, detail="No autorizado para editar este albergue")
+
+    albergue = db.query(models.Albergue).filter(models.Albergue.id == albergue_id).first()
+    if not albergue:
+        raise HTTPException(status_code=404, detail="Albergue no encontrado")
+
+    if "qr_imagen_id" in data:
+        albergue.qr_imagen_id = data["qr_imagen_id"]
+
+    db.commit()
+    db.refresh(albergue)
+
+    return {"mensaje": "Albergue actualizado correctamente"}

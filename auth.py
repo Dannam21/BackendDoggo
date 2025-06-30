@@ -17,8 +17,10 @@ def create_access_token(data: dict):
 def verify_token(token: str):
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        print("✅ Payload decodificado:", payload)
         return payload
-    except JWTError:
+    except JWTError as e:
+        print("❌ Error al decodificar token:", e)
         return None
     
 def get_current_user(token: str = Depends(oauth2_scheme)):
