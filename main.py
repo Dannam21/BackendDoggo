@@ -364,7 +364,9 @@ def editar_mascota(
 @app.get("/mascotas", response_model=list[schemas.MascotaResponse], summary="Listar todas las mascotas de todos los albergues", tags=["Mascotas"])
 def listar_todas_las_mascotas(db: Session = Depends(get_db)):
 
-    db_mascotas = db.query(models.Mascota).all()
+    db_mascotas = db.query(models.Mascota)\
+                    .filter(models.Mascota.estado != "Adoptado")\
+                    .all()
     resultado = []
     for m in db_mascotas:
         lista_etqs = []
@@ -558,8 +560,9 @@ def obtener_recomendaciones(
 
     # 4) Traer mascotas que NO han sido denegadas
     mascotas_db = db.query(models.Mascota)\
-                    .filter(~models.Mascota.id.in_(denied_ids))\
-                    .all()
+                .filter(~models.Mascota.id.in_(denied_ids))\
+                .filter(models.Mascota.estado != "Adoptado")\
+                .all()
     if not mascotas_db:
         return []
 
