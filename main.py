@@ -803,7 +803,7 @@ async def websocket_chat(
     await websocket.accept()
 
     key = get_user_key(emisor_id, emisor_tipo)
-    active_connections[key] = websocket  # ✅ Registramos la conexión
+    active_connections[key] = websocket
 
     try:
         while True:
@@ -811,7 +811,6 @@ async def websocket_chat(
 
             msg_in = MessageIn(**data)
 
-            # Guardamos el mensaje en la base de datos con mascota_id
             mensaje_db = Mensaje(
                 emisor_id=emisor_id,
                 emisor_tipo=emisor_tipo,
