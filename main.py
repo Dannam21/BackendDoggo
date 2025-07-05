@@ -95,6 +95,20 @@ def register_adoptante(user: schemas.AdoptanteRegister, db: Session = Depends(ge
         "id": new_adoptante.id,
     }
 
+@app.get("/calendario/adoptante/{adoptante_id}", response_model=list[schemas.CalendarioOut])
+def listar_citas_adoptante(adoptante_id: int, db: Session = Depends(get_db)):
+        # 1) verifica que exista
+    if not db.query(Adoptante).get(adoptante_id):
+        raise HTTPException(status_code=404, detail="Adoptante no encontrado")
+    # 2) trae todas sus visitas + eventos
+    return (
+        db.query(Calendario)
+          .filter(Calendario.adoptante_id == adoptante_id)
+          .order_by(Calendario.fecha_hora)               # opcional
+          .all()
+    )
+
+
 @app.post("/login/adoptante", tags=["Adoptante"])
 def login_adoptante(user: schemas.AdoptanteLogin, db: Session = Depends(get_db)):
     adopt = db.query(models.Adoptante).filter(models.Adoptante.correo == user.correo).first()
@@ -1269,3 +1283,4 @@ def actualizar_albergue(
     db.refresh(albergue)
 
     return {"mensaje": "Albergue actualizado correctamente"}
+
