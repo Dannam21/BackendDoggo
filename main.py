@@ -27,7 +27,7 @@ app = FastAPI()
 #    "*",
 #]
 origins = [
-    "http://localhost:5173"
+    "*"
 ]
 
 
