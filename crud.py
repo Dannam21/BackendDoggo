@@ -12,6 +12,9 @@ from models import Mascota, Calendario, CitaVisita, CitaEvento, Match, Adopcion,
 # === ADOPTANTE ===
 def create_adoptante(db: Session, adoptante: schemas.AdoptanteRegister):
     hashed_pw = bcrypt.hash(adoptante.contrasena)
+    etiquetas = json.dumps(adoptante.etiquetas) if adoptante.etiquetas is not None else None
+    pesos     = json.dumps(adoptante.pesos)     if adoptante.pesos     is not None else None
+    
     db_adoptante = models.Adoptante(
         nombre=adoptante.nombre,
         apellido=adoptante.apellido,
@@ -19,9 +22,9 @@ def create_adoptante(db: Session, adoptante: schemas.AdoptanteRegister):
         correo=adoptante.correo,
         telefono=getattr(adoptante, "telefono", None),
         contrasena=hashed_pw,
-        etiquetas=json.dumps(adoptante.etiquetas or {}),
+        etiquetas=etiquetas,      
         imagen_perfil_id=adoptante.imagen_perfil_id,
-        pesos=json.dumps(adoptante.pesos or {})   # ← guardamos JSON
+        pesos=pesos,    
     )
     db.add(db_adoptante)
     db.commit()
@@ -98,37 +101,6 @@ def get_all_mascotas(db: Session):
 def get_mascotas_por_albergue(db: Session, albergue_id: int):
     return db.query(models.Mascota).filter(models.Mascota.albergue_id == albergue_id).all()
 
-
-# == Match == 
-def obtener_matches(db: Session, usuario_actual_id: int, k=3):
-    usuarios = db.query(models.User).all()
-
-    data = []
-    ids = []
-    for user in usuarios:
-        respuestas = db.query(models.Respuesta).filter_by(user_id=user.id).order_by(models.Respuesta.pregunta_id).all()
-        if respuestas:
-            vector = [r.valor for r in respuestas]
-            if len(vector) == len(db.query(models.Pregunta).all()):
-                data.append(vector)
-                ids.append(user.id)
-
-    if usuario_actual_id not in ids:
-        raise Exception("El usuario actual no tiene respuestas completas")
-
-    data = np.array(data)
-
-    index_usuario = ids.index(usuario_actual_id)
-
-    knn = NearestNeighbors(n_neighbors=min(k + 1, len(data)), algorithm='auto')  # +1 porque incluirá el mismo usuario
-    knn.fit(data)
-
-    distances, indices = knn.kneighbors([data[index_usuario]])
-
-    vecinos_ids = [ids[i] for i in indices[0] if ids[i] != usuario_actual_id]
-
-    return vecinos_ids
-
 def crear_cita_visita(db: Session, data: schemas.CitaVisitaCreate):
     lima = timezone("America/Lima")
     data_dict = data.calendario.dict()
@@ -155,11 +127,6 @@ def crear_cita_visita(db: Session, data: schemas.CitaVisitaCreate):
     db.refresh(cita)
     return cita
 
-
-
-
-
-
 def crear_cita_evento(db: Session, data: schemas.CitaEventoCreate):
     cita = Calendario(**data.calendario.dict(), tipo="evento")
     db.add(cita)
@@ -170,7 +137,6 @@ def crear_cita_evento(db: Session, data: schemas.CitaEventoCreate):
     db.commit()
     db.refresh(cita)
     return cita
-
 
 def obtener_citas_por_albergue(db: Session, albergue_id: int):
     return db.query(Calendario).filter(Calendario.albergue_id == albergue_id).all()

@@ -9,10 +9,10 @@ class AdoptanteRegister(BaseModel):
     dni: str
     correo: str
     contrasena: str
-    etiquetas: Dict[str, Union[str, List[str]]] = {}
+    etiquetas: Optional[Dict[str, Union[str, List[str]]]] = None
     imagen_perfil_id: Optional[int] = None
     telefono: Optional[str] = None
-    pesos: Dict[str, float] = {}
+    pesos: Optional[Dict[str, float]] = None
 
 
 class AlbergueRegister(BaseModel):
@@ -25,7 +25,6 @@ class AlbergueRegister(BaseModel):
     direccion: Optional[str] = None
     latitud: Optional[str] = None
     longitud: Optional[str] = None
-
 
 # === LOGIN ===
 class AdoptanteLogin(BaseModel):
@@ -299,4 +298,4 @@ class MatchTotalSimpleOut(BaseModel):
     fecha: datetime
 
     class Config:
-        orm_mode = True
+        from_attributes = True

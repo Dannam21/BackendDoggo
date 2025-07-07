@@ -22,7 +22,7 @@ class Adoptante(Base):
     
     
     matches = relationship("Match", back_populates="adoptante", cascade="all, delete-orphan")
-    mascotas = relationship("Mascota",secondary="matches",back_populates="adoptantes")
+    mascotas = relationship("Mascota",secondary="matches",back_populates="adoptantes",overlaps="matches")
     adopciones = relationship("Adopcion", back_populates="adoptante", cascade="all, delete-orphan")
     denegaciones = relationship("Denegacion", back_populates="adoptante", cascade="all, delete-orphan")
 
@@ -72,7 +72,7 @@ class Mascota(Base):
     imagen = relationship("Imagen")
     albergue = relationship("Albergue", back_populates="mascotas")
     matches    = relationship("Match",    back_populates="mascota", cascade="all, delete-orphan")
-    adoptantes = relationship("Adoptante", secondary="matches", back_populates="mascotas")
+    adoptantes = relationship("Adoptante",secondary="matches",back_populates="mascotas",overlaps="matches")    
     adopcion   = relationship("Adopcion", back_populates="mascota",uselist=False, cascade="all, delete-orphan")
     denegaciones = relationship("Denegacion", back_populates="mascota", cascade="all, delete-orphan")
 
@@ -136,9 +136,8 @@ class Match(Base):
     mascota_id   = Column(Integer, ForeignKey("mascotas.id"),  primary_key=True)
     fecha = Column(DateTime, default=datetime.utcnow)
     
-    adoptante = relationship("Adoptante", back_populates="matches")
-    mascota   = relationship("Mascota",   back_populates="matches")
-
+    adoptante = relationship("Adoptante",back_populates="matches",overlaps="mascotas,adoptantes")
+    mascota = relationship("Mascota",back_populates="matches",overlaps="mascotas,adoptantes")
 class MatchTotal(Base):
     __tablename__ = "match_totales"
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)

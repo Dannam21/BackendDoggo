@@ -10,7 +10,7 @@ from fastapi.security import OAuth2PasswordBearer # type: ignore
 from fastapi.middleware.cors import CORSMiddleware # type: ignore
 from sklearn.preprocessing import MultiLabelBinarizer # type: ignore
 from sklearn.metrics.pairwise import cosine_similarity # type: ignore
-from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, APIRouter, WebSocket # type: ignore
+from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, APIRouter, WebSocket, Body # type: ignore
 from models import Adoptante, Albergue, Mascota, Imagen
 from sqlalchemy.orm import Session
 from schemas import MessageIn, MessageOut, MascotaResponse, AdoptanteUpdate, MatchTotalSimpleOut, MatchTotalCreate
@@ -189,6 +189,34 @@ def update_adoptante(
     # 6) Devolvemos el adoptante actualizado (incluyendo etiquetas/pesos si los tienes)
     return schemas.AdoptanteOut.from_orm_with_etiquetas(adoptante)
 
+@app.patch(
+    "/adoptante/{adoptante_id}",
+    response_model=schemas.AdoptanteOut,
+    tags=["Adoptante"],
+    summary="Actualizar etiquetas y pesos del adoptante",
+)
+def patch_etiquetas_pesos(
+    adoptante_id: int,
+    data: dict = Body(...),  # espera {"etiquetas": {...}, "pesos": {...}}
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    if user.get("rol") != "adoptante" or int(user["sub"]) != adoptante_id:
+        raise HTTPException(403, "No tienes permiso para editar este perfil")
+
+    adoptante = db.query(models.Adoptante).get(adoptante_id)
+    if not adoptante:
+        raise HTTPException(404, "Adoptante no encontrado")
+
+    # sólo aplicamos los dos campos que interesan
+    if "etiquetas" in data:
+        adoptante.etiquetas = json.dumps(data["etiquetas"])
+    if "pesos" in data:
+        adoptante.pesos = json.dumps(data["pesos"])
+
+    db.commit()
+    db.refresh(adoptante)
+    return schemas.AdoptanteOut.from_orm_with_etiquetas(adoptante)
 
 # ------------------------------------------------
 # Sección: Albergue
@@ -1259,7 +1287,6 @@ def total_matches_por_mascota(mascota_id: int, db: Session = Depends(get_db)):
     )
 
 ####### QR
-from fastapi import Body
 
 @app.put("/albergue/{albergue_id}", tags=["Albergue"])
 def actualizar_albergue(
