@@ -952,18 +952,49 @@ def obtener_citas_por_fecha(
 
 
 from schemas import MatchCreate
+from fastapi import HTTPException, status
+from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.exc import IntegrityError
+
 
 @app.post("/matches/")
 def crear_match(match: MatchCreate, db: Session = Depends(get_db)):
-    nuevo_match = models.Match(
-        adoptante_id=match.adoptante_id,
-        mascota_id=match.mascota_id
-    )
-    db.add(nuevo_match)
-    db.commit()
-    db.refresh(nuevo_match)
-    return {"mensaje": "Match guardado", "match": nuevo_match}
-
+    # ═══════════ VERIFICAR SI YA EXISTE EL MATCH ═══════════
+    match_existente = db.query(models.Match).filter(
+        models.Match.adoptante_id == match.adoptante_id,
+        models.Match.mascota_id == match.mascota_id
+    ).first()
+    
+    if match_existente:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Ya existe un match entre el adoptante {match.adoptante_id} y la mascota {match.mascota_id}"
+        )
+    
+    # ═══════════ CREAR EL NUEVO MATCH ═══════════
+    try:
+        nuevo_match = models.Match(
+            adoptante_id=match.adoptante_id,
+            mascota_id=match.mascota_id
+        )
+        db.add(nuevo_match)
+        db.commit()
+        db.refresh(nuevo_match)
+        return {"mensaje": "Match guardado", "match": nuevo_match}
+    
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="Error de integridad: Ya existe un match con estos datos"
+        )
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error interno del servidor: {str(e)}"
+        )
+    
 @app.get("/matches/{adoptante_id}")
 def listar_matches(adoptante_id: int, db: Session = Depends(get_db)):
     matches = db.query(models.Match).filter(models.Match.adoptante_id == adoptante_id).all()

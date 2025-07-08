@@ -120,6 +120,7 @@ class CitaVisita(Base):
     calendario = relationship("Calendario", backref="visita", uselist=False)
     adoptante = relationship("Adoptante", backref="citas_visita")
 
+from sqlalchemy import Column, Integer, DateTime, ForeignKey, UniqueConstraint
 
 # ===== CITA EVENTO =====
 class CitaEvento(Base):
@@ -138,6 +139,11 @@ class Match(Base):
     
     adoptante = relationship("Adoptante",back_populates="matches",overlaps="mascotas,adoptantes")
     mascota = relationship("Mascota",back_populates="matches",overlaps="mascotas,adoptantes")
+    __table_args__ = (
+        UniqueConstraint('adoptante_id', 'mascota_id', name='unique_adoptante_mascota'),
+    )
+
+
 class MatchTotal(Base):
     __tablename__ = "match_totales"
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
