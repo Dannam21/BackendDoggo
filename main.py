@@ -391,7 +391,8 @@ def editar_mascota(
     return schemas.MascotaResponse(
         id=db_mascota.id,
         nombre=db_mascota.nombre,
-        edad=db_mascota.edad,
+        edad_valor=db_mascota.edad_valor,
+        edad_unidad=db_mascota.edad_unidad,
         genero=db_mascota.genero,
         estado=db_mascota.estado,
         especie=db_mascota.especie,
